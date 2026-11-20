@@ -69,7 +69,7 @@ describe("with both fixtures stored", () => {
     expect(body).toContain("Seat 1");
     expect(body).toContain("Seat 3");
     expect(body).toContain("<li>1:02</li>");
-    expect(body).toContain("<li>2:14</li>");
+    expect(body).toContain('<li class="over">2:14 (over limit)</li>');
     expect(body).toContain("3:48"); // Jacob total 228000
     expect(body).toContain("11:06");
     expect(body).toContain('href="/"');

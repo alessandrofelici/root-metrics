@@ -19,6 +19,7 @@ ul.games li { padding: 0.5rem 0; border-bottom: 1px solid #ccc; }
 section.player { border-top: 1px solid #ccc; padding-top: 0.5rem; margin-top: 1rem; }
 .warnings { border: 1px solid #c90; padding: 0.5rem 1rem; }
 img.icon { height: 1.5rem; width: auto; vertical-align: middle; margin-right: 0.25rem; }
+li.over { font-weight: bold; color: #b00; }
 img.icon-lg { height: 3rem; width: auto; vertical-align: middle; margin-right: 0.5rem; }
 `;
 
@@ -81,7 +82,16 @@ function GameList({ games }: { games: StoredResult[] }) {
   );
 }
 
-function PlayerBlock({ player: p }: { player: Player }) {
+/** Turns over the limit. The last turn of a truncated player sums several real turns, so it is
+ *  never flagged. */
+function isOverLimit(p: Player, i: number, limitMs: number | null): boolean {
+  if (limitMs === null) return false;
+  if (p.turns_truncated && i === p.turns_ms.length - 1) return false;
+  return p.turns_ms[i]! > limitMs;
+}
+
+function PlayerBlock({ player: p, limitMs }: { player: Player; limitMs: number | null }) {
+  const over = p.turns_ms.filter((_, i) => isOverLimit(p, i, limitMs)).length;
   return (
     <section class="player">
       <h2>
@@ -93,11 +103,18 @@ function PlayerBlock({ player: p }: { player: Player }) {
         <br />
         Total time: {formatDuration(p.total_ms)}
       </p>
-      <p>Turn times:</p>
+      <p>
+        Turn times
+        {limitMs !== null ? ` (limit ${formatDuration(limitMs)}, ${over} over)` : ""}:
+      </p>
       <ol>
-        {p.turns_ms.map((t) => (
-          <li>{formatDuration(t)}</li>
-        ))}
+        {p.turns_ms.map((t, i) =>
+          isOverLimit(p, i, limitMs) ? (
+            <li class="over">{formatDuration(t)} (over limit)</li>
+          ) : (
+            <li>{formatDuration(t)}</li>
+          ),
+        )}
       </ol>
       {p.turns_truncated ? <p>Note: last turn includes extra turns beyond 128.</p> : null}
     </section>
@@ -132,7 +149,7 @@ function GameDetail({ stored }: { stored: StoredResult }) {
         </div>
       ) : null}
       {r.players.map((p) => (
-        <PlayerBlock player={p} />
+        <PlayerBlock player={p} limitMs={r.turn_limit_ms} />
       ))}
     </>
   );

@@ -25,6 +25,7 @@ It's a web app run on a single host computer. Phones and laptops on the same net
 - **Local server only.** There are still no accounts, auth, cloud sync or internet-facing services. The server is the brief's "local only" `ResultStore`.
 - **Faction icons.** The brief says "no faction artwork"; this project shows the bundled icons from `public/factions/` (see below).
 - **One extra metric: average time per player**, the game's `global_ms` divided by the number of players. It is shown on both pages. No other statistics.
+- **Over-limit turns are marked** on the detail page when `turn_limit_ms` is set (bold, "(over limit)", plus a per-player count). A truncated player's last turn is never marked, because it combines several real turns.
 
 Everything else in the brief applies unchanged: contract v1, parser rules, `ResultSource` with only `FixtureResultSource`, and the "Do not assume or build yet" list.
 
@@ -44,6 +45,11 @@ Import game results from bundled JSON fixtures, validate them against contract v
 Out of scope until the firmware is finished: BLE/Wi-Fi transport (including an HTTP ingest endpoint), live updates, faction art, stats/charts, and v2 fields.
 
 Work is tracked in GitHub Issues under the **MVP** milestone.
+
+## Test fixtures
+
+- `fixtures/`: the two example games from `specs.md`. The app imports these at startup.
+- `test/fixtures/`: edge cases at the contract's limits, used only by tests: 4 players × 128 turns (about 4 KB compact), `turns_truncated: true`, a single-turn player, and an unknown faction with unusual nicknames.
 
 ## Running
 
