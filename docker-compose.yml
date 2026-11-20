@@ -1,0 +1,12 @@
+services:
+  root-metrics:
+    build: .
+    # Run as the host user that owns ./data so the container can write the
+    # SQLite file. Defaults to 1000:1000 (the image's `node` user); override
+    # with UID/GID in a .env file if your host user has a different id.
+    user: "${UID:-1000}:${GID:-1000}"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

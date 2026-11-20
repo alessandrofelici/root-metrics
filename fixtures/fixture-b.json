@@ -1,0 +1,19 @@
+{
+  "schema": "rootclock.game_result",
+  "schema_version": 1,
+  "game_id": "c09e5b7a31f2d846",
+  "device": { "app": "rootclock", "app_version": "001" },
+  "ended_at": "2026-11-21T20:14:05",
+  "turn_limit_ms": null,
+  "global_ms": 460000,
+  "players": [
+    { "seat": 1, "nickname": "Jacob", "faction": "cult",
+      "total_ms": 135000, "turns_ms": [70000, 65000], "turns_truncated": false },
+    { "seat": 2, "nickname": "Alex", "faction": "duchy",
+      "total_ms": 170000, "turns_ms": [80000, 90000], "turns_truncated": false },
+    { "seat": 3, "nickname": "Ahmed", "faction": "corvid",
+      "total_ms": 115000, "turns_ms": [55000, 60000], "turns_truncated": false },
+    { "seat": 4, "nickname": "Lorenzo", "faction": "vagabond",
+      "total_ms": 40000, "turns_ms": [40000], "turns_truncated": false }
+  ]
+}

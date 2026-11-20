@@ -1,0 +1,17 @@
+{
+  "schema": "rootclock.game_result",
+  "schema_version": 1,
+  "game_id": "7f3a9c21e04b5d18",
+  "device": { "app": "rootclock", "app_version": "001" },
+  "ended_at": null,
+  "turn_limit_ms": 120000,
+  "global_ms": 666000,
+  "players": [
+    { "seat": 1, "nickname": "Jacob", "faction": "marquise",
+      "total_ms": 228000, "turns_ms": [62000, 95000, 71000], "turns_truncated": false },
+    { "seat": 2, "nickname": "Alex", "faction": "eyrie",
+      "total_ms": 342000, "turns_ms": [88000, 120000, 134000], "turns_truncated": false },
+    { "seat": 3, "nickname": "Ahmed", "faction": "woodland",
+      "total_ms": 96000, "turns_ms": [45000, 51000], "turns_truncated": false }
+  ]
+}
