@@ -5,6 +5,10 @@
 > device firmware is finished. Changes to this contract will arrive as a new
 > `schema_version`.
 
+> **Project note (root-metrics):** the platform has been chosen: a Dockerized TypeScript web app
+> on a single host computer, not a native mobile app. See [README → Stack](README.md#stack) for the
+> stack and the deviations from this brief.
+
 ## What this is
 
 **rootclock** is firmware for a FreeWili OG, a handheld dev board with an LCD and five
