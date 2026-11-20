@@ -35,10 +35,12 @@ chosen**. The data contract below is fixed for v1.
 
    ```ts
    // Language-neutral sketch; adapt to the chosen platform.
+   // root-metrics adaptation: parser warnings travel with each result through the source and
+   // the store, so the detail page can show them. Implemented in src/types.ts.
    interface ResultSource {
-     /** Emits each GameResult a source receives. Transport-specific sources (BLE, HTTP)
-      *  are added later, by a future brief. Only FixtureResultSource exists now. */
-     results(): AsyncIterable<GameResult>;
+     /** Emits each GameResult a source receives, with its parser warnings. Transport-specific
+      *  sources (BLE, HTTP) are added later, by a future brief. Only FixtureResultSource exists now. */
+     results(): AsyncIterable<{ result: GameResult; warnings: string[] }>;
    }
    class FixtureResultSource implements ResultSource { /* reads bundled/imported JSON */ }
 
@@ -47,10 +49,17 @@ chosen**. The data contract below is fixed for v1.
      | { ok: false; error: string };
    function parseGameResult(json: string): ParseOutcome;
 
+   interface StoredResult {
+     result: GameResult;
+     warnings: string[];
+     saved_at: string;            // server-side receive time (ISO 8601 UTC); sort key
+   }
+
    interface ResultStore {        // local only
-     save(r: GameResult): void;   // idempotent: de-duplicate by game_id
-     list(): GameResult[];        // newest first
-     get(gameId: string): GameResult | undefined;
+     save(r: GameResult, warnings?: string[]): boolean; // idempotent: de-duplicate by game_id;
+                                                        // true if newly stored
+     list(): StoredResult[];      // newest first, by saved_at (ended_at is null in the MVP)
+     get(gameId: string): StoredResult | undefined;
    }
    ```
 
