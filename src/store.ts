@@ -50,7 +50,7 @@ export class SqliteResultStore implements ResultStore {
     );
   }
 
-  save(r: GameResult, warnings: string[] = []): boolean {
+  async save(r: GameResult, warnings: string[] = []): Promise<boolean> {
     const info = this.insertStmt.run(
       r.game_id,
       new Date().toISOString(),
@@ -60,16 +60,16 @@ export class SqliteResultStore implements ResultStore {
     return info.changes > 0;
   }
 
-  list(): StoredResult[] {
+  async list(): Promise<StoredResult[]> {
     return this.listStmt.all().map(toStored);
   }
 
-  get(gameId: string): StoredResult | undefined {
+  async get(gameId: string): Promise<StoredResult | undefined> {
     const row = this.getStmt.get(gameId);
     return row ? toStored(row) : undefined;
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.db.close();
   }
 }

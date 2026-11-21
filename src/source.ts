@@ -1,5 +1,5 @@
-// The single ResultSource implementation for the MVP, plus the source → store pipe.
-// Transport-specific sources (BLE, HTTP, ...) are out of scope until a future brief.
+// FixtureResultSource (bundled JSON files) plus the source → store pipe. Results from the
+// device arrive over HTTP instead: POST /api/results in src/api.ts.
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parseGameResult } from "./parse.js";
@@ -64,7 +64,7 @@ export interface IngestSummary {
 export async function ingest(source: ResultSource, store: ResultStore): Promise<IngestSummary> {
   const summary: IngestSummary = { inserted: 0, duplicates: 0 };
   for await (const { result, warnings } of source.results()) {
-    if (store.save(result, warnings)) summary.inserted++;
+    if (await store.save(result, warnings)) summary.inserted++;
     else summary.duplicates++;
   }
   return summary;

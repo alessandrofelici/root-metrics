@@ -21,12 +21,12 @@ function load(name: string): GameResult {
 
 let tmp: string;
 let store: SqliteResultStore;
-beforeEach(() => {
+beforeEach(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "root-metrics-edge-"));
   store = new SqliteResultStore(path.join(tmp, "t.db"));
 });
-afterEach(() => {
-  store.close();
+afterEach(async () => {
+  await store.close();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -34,7 +34,7 @@ const page = async (id: string) => (await createApp(store).request(`/games/${id}
 const turnItems = (html: string) => html.match(/<li( class="over")?>[0-9:]+( \(over limit\))?<\/li>/g) ?? [];
 
 describe("edge-case fixtures", () => {
-  it("every edge fixture parses with no warnings", () => {
+  it("every edge fixture parses with no warnings", async () => {
     for (const f of fs.readdirSync(DIR).filter((f) => f.endsWith(".json"))) load(f);
   });
 
@@ -42,15 +42,15 @@ describe("edge-case fixtures", () => {
     expect(Buffer.byteLength(raw("max-4x128.json").trim())).toBeLessThan(5 * 1024);
     const r = load("max-4x128.json");
     expect(r.players.map((p) => p.turns_ms.length)).toEqual([128, 128, 128, 128]);
-    store.save(r);
-    expect(store.get(r.game_id)!.result).toEqual(r);
+    await store.save(r);
+    expect((await store.get(r.game_id))!.result).toEqual(r);
     expect(turnItems(await page(r.game_id))).toHaveLength(512);
   });
 
   it("turns_truncated: shows the note and never flags the folded last turn", async () => {
     const r = load("truncated.json");
     expect(r.players[0]!.turns_truncated).toBe(true);
-    store.save({ ...r, turn_limit_ms: 1 }); // every normal turn is over a 1 ms limit
+    await store.save({ ...r, turn_limit_ms: 1 }); // every normal turn is over a 1 ms limit
     const html = await page(r.game_id);
     expect(html).toContain("last turn includes extra turns beyond 128");
     const p1 = turnItems(html).slice(0, 128);
@@ -60,7 +60,7 @@ describe("edge-case fixtures", () => {
 
   it("single-turn player renders one turn; over-limit turns are marked", async () => {
     const r = load("single-turn.json");
-    store.save(r);
+    await store.save(r);
     const html = await page(r.game_id);
     expect(html).toContain("Seat 1: Ahmed");
     expect(html).toContain("(limit 1:00, 0 over)"); // 0:42
@@ -71,7 +71,7 @@ describe("edge-case fixtures", () => {
 
   it("unknown faction and odd nickname are shown as-is, escaped, without an icon", async () => {
     const r = load("unknown-faction-nickname.json");
-    store.save(r);
+    await store.save(r);
     const html = await page(r.game_id);
     expect(html).toContain("Zoë 🦦");
     expect(html).toContain("Faction: otters");
@@ -87,7 +87,7 @@ describe("over-limit marking on the spec fixtures", () => {
     const root = path.resolve(import.meta.dirname, "../fixtures");
     for (const f of ["fixture-a.json", "fixture-b.json"]) {
       const out = parseGameResult(fs.readFileSync(path.join(root, f), "utf8"));
-      if (out.ok) store.save(out.result);
+      if (out.ok) await store.save(out.result);
     }
     const a = await page("7f3a9c21e04b5d18");
     expect(a).toContain('<li class="over">2:14 (over limit)</li>');

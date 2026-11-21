@@ -7,6 +7,7 @@ import { html } from "hono/html";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { PUBLIC_DIR } from "./config.js";
 import { factionIconUrl, factionName } from "./factions.js";
+import { mountApi } from "./api.js";
 import { averagePerPlayerMs, formatDuration } from "./format.js";
 import type { GameResult, Player, ResultStore, StoredResult } from "./types.js";
 
@@ -166,24 +167,36 @@ function NotFound() {
   );
 }
 
+export interface AppOptions {
+  publicDir?: string;
+  /** Serve public/ under /static/ (default). Off on Vercel, whose CDN serves those files. */
+  serveStaticFiles?: boolean;
+  /** Shared secret the device sends as `Authorization: Bearer <token>`. Unset: ingest is off. */
+  ingestToken?: string;
+}
+
 /** Builds the web app over `store`. No side effects; the caller serves it. */
-export function createApp(store: ResultStore, opts: { publicDir?: string } = {}): Hono {
+export function createApp(store: ResultStore, opts: AppOptions = {}): Hono {
   const app = new Hono();
 
   // Bundled static assets (faction icons) from public/, served under /static/.
-  app.use(
-    "/static/*",
-    serveStatic({
-      root: opts.publicDir ?? PUBLIC_DIR,
-      rewriteRequestPath: (p) => p.replace(/^\/static/, ""),
-      onFound: (_p, c) => c.header("Cache-Control", "public, max-age=86400"),
-    }),
-  );
+  if (opts.serveStaticFiles ?? true) {
+    app.use(
+      "/static/*",
+      serveStatic({
+        root: opts.publicDir ?? PUBLIC_DIR,
+        rewriteRequestPath: (p) => p.replace(/^\/static/, ""),
+        onFound: (_p, c) => c.header("Cache-Control", "public, max-age=86400"),
+      }),
+    );
+  }
 
-  app.get("/", (c) => c.html(page("Games", <GameList games={store.list()} />)));
+  mountApi(app, store, { ingestToken: opts.ingestToken });
 
-  app.get("/games/:gameId", (c) => {
-    const stored = store.get(c.req.param("gameId"));
+  app.get("/", async (c) => c.html(page("Games", <GameList games={await store.list()} />)));
+
+  app.get("/games/:gameId", async (c) => {
+    const stored = await store.get(c.req.param("gameId"));
     if (!stored) return c.html(page("Game not found", <NotFound />), 404);
     return c.html(page(`Game ${stored.result.game_id}`, <GameDetail stored={stored} />));
   });

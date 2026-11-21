@@ -7,6 +7,12 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "8080:8080"
+    environment:
+      # From .env next to this file. INGEST_TOKEN turns on POST /api/results.
+      # Leave the Supabase pair empty to keep results in ./data/rootclock.db.
+      INGEST_TOKEN: ${INGEST_TOKEN:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
     volumes:
       - ./data:/data
     restart: unless-stopped

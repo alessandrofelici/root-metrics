@@ -20,13 +20,13 @@ function loadFixture(name: string): GameResult {
 let tmpDir: string;
 let store: SqliteResultStore;
 
-beforeEach(() => {
+beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "root-metrics-app-"));
   store = new SqliteResultStore(path.join(tmpDir, "test.db"));
 });
 
-afterEach(() => {
-  store.close();
+afterEach(async () => {
+  await store.close();
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
@@ -36,9 +36,9 @@ async function get(p: string): Promise<{ status: number; body: string }> {
 }
 
 describe("with both fixtures stored", () => {
-  beforeEach(() => {
-    store.save(loadFixture("fixture-a.json"));
-    store.save(loadFixture("fixture-b.json"));
+  beforeEach(async () => {
+    await store.save(loadFixture("fixture-a.json"));
+    await store.save(loadFixture("fixture-b.json"));
   });
 
   it("GET / lists both games with count, time and date", async () => {
@@ -111,7 +111,7 @@ describe("edge cases", () => {
   it("unknown faction key is shown as-is", async () => {
     const r = base();
     r.players[0]!.faction = "otters";
-    store.save(r);
+    await store.save(r);
     const { body } = await get(`/games/${ID_A}`);
     expect(body).toContain("otters");
   });
@@ -119,7 +119,7 @@ describe("edge cases", () => {
   it("escapes untrusted nicknames", async () => {
     const r = base();
     r.players[0]!.nickname = "<script>alert(1)</script>";
-    store.save(r);
+    await store.save(r);
     const { body } = await get(`/games/${ID_A}`);
     expect(body).not.toContain("<script>");
     expect(body).toContain("&lt;script&gt;");
@@ -128,7 +128,7 @@ describe("edge cases", () => {
   it("renders stored warnings and the truncation note", async () => {
     const r = base();
     r.players[1]!.turns_truncated = true;
-    store.save(r, ["sum of players total_ms differs from global_ms"]);
+    await store.save(r, ["sum of players total_ms differs from global_ms"]);
     const { body } = await get(`/games/${ID_A}`);
     expect(body).toContain("Warnings");
     expect(body).toContain("sum of players total_ms differs from global_ms");
@@ -138,7 +138,7 @@ describe("edge cases", () => {
   it("URL-encodes game ids in links and resolves them on the detail route", async () => {
     const r = base();
     r.game_id = "a b/c?d";
-    store.save(r);
+    await store.save(r);
     const list = await get("/");
     expect(list.body).toContain('href="/games/a%20b%2Fc%3Fd"');
     const detail = await get("/games/a%20b%2Fc%3Fd");
@@ -148,9 +148,9 @@ describe("edge cases", () => {
 });
 
 describe("faction icons and average per player", () => {
-  beforeEach(() => {
-    store.save(loadFixture("fixture-a.json"));
-    store.save(loadFixture("fixture-b.json"));
+  beforeEach(async () => {
+    await store.save(loadFixture("fixture-a.json"));
+    await store.save(loadFixture("fixture-b.json"));
   });
 
   it("list shows the average per player and faction icons", async () => {
@@ -173,7 +173,7 @@ describe("faction icons and average per player", () => {
     const r = loadFixture("fixture-a.json");
     r.game_id = "otters01";
     r.players[0]!.faction = "otters";
-    store.save(r);
+    await store.save(r);
     const { body } = await get("/games/otters01");
     expect(body).toContain("otters");
     expect(body).not.toContain("/static/factions/otters.png");
