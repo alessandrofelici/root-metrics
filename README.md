@@ -10,24 +10,29 @@ The full brief and data contract (v1) are in [`specs.md`](specs.md).
 |---|---|
 | Language | TypeScript (Node 22 LTS) |
 | Server + pages | Hono, server-rendered JSX |
-| Storage | SQLite (`better-sqlite3`), one file: `data/rootclock.db` |
+| Storage | SQLite (`better-sqlite3`), one file: `data/rootclock.db`; or Supabase Postgres when hosted (see [Hosting on Vercel + Supabase](#hosting-on-vercel--supabase)) |
 | Validation | zod |
 | Tests | Vitest |
-| Packaging | Docker Compose, one container, `./data` bind-mounted to `/data` |
+| Packaging | Docker Compose, one container, `./data` bind-mounted to `/data`; or one Vercel Function |
 
-It's a web app run on a single host computer. Phones and laptops on the same network open `http://<host-ip>:8080`.
+It runs two ways, with the same pages and API:
+
+- **Hosted:** Vercel serves the app, Supabase holds the results. The board uploads over HTTPS from anywhere it has Wi-Fi, and anyone with the link can view the games.
+- **Local:** Docker on one computer, results in a SQLite file. Phones and laptops on the same network open `http://<host-ip>:8080`.
 
 ### Deviations from the brief
 
 `specs.md` describes a native mobile app with no backend. This project deliberately differs:
 
 - **Web app on a host instead of a mobile app.** The app runs in Docker on one computer so its data lives in one place and is easy to back up.
-- **Local server only.** There are still no accounts, auth, cloud sync or internet-facing services. The server is the brief's "local only" `ResultStore`.
+- **Hosted or local server.** There are no user accounts. The pages are public to anyone with the URL; writing needs the device's shared token (`INGEST_TOKEN`). Results live in Supabase when hosted, or in the SQLite file locally.
 - **Faction icons.** The brief says "no faction artwork"; this project shows the bundled icons from `public/factions/` (see below).
 - **One extra metric: average time per player**, the game's `global_ms` divided by the number of players. It is shown on both pages. No other statistics.
 - **Over-limit turns are marked** on the detail page when `turn_limit_ms` is set (bold, "(over limit)", plus a per-player count). A truncated player's last turn is never marked, because it combines several real turns.
 
-Everything else in the brief applies unchanged: contract v1, parser rules, `ResultSource` with only `FixtureResultSource`, and the "Do not assume or build yet" list.
+- **HTTP ingest.** The device posts each result to `POST /api/results` ([Device API](#device-api)). The bundled fixtures still go through `FixtureResultSource`, and only into a local database.
+
+Everything else in the brief applies unchanged: contract v1, parser rules and the "Do not assume or build yet" list.
 
 ## Faction icons
 
@@ -42,9 +47,80 @@ Unknown faction keys get no icon, just the raw key as text. To add or replace an
 
 Import game results from bundled JSON fixtures, validate them against contract v1, store them in SQLite, and show them on two pages (game list and game detail).
 
-Out of scope until the firmware is finished: BLE/Wi-Fi transport (including an HTTP ingest endpoint), live updates, faction art, stats/charts, and v2 fields.
+Out of scope for now: live updates, stats/charts, and v2 fields. The HTTP ingest endpoint for the board's Wi-Fi upload exists (see below).
 
 Work is tracked in GitHub Issues under the **MVP** milestone.
+
+## Device API
+
+The rootclock board uploads each finished game through its ESP32-C6 (hardware-playground, `documents/04`). Anything else that can make an HTTP request can use it too.
+
+```
+POST /api/results
+Authorization: Bearer <INGEST_TOKEN>
+Content-Type: application/json
+
+<one contract-v1 result>
+```
+
+| Status | Body | Meaning |
+|---|---|---|
+| `201` | `{"status":"stored","game_id":"…","warnings":[…]}` | New game stored |
+| `200` | `{"status":"duplicate","game_id":"…","warnings":[…]}` | Already stored. Also a success: the device retries until it hears back, so repeats are normal |
+| `400` | `{"error":"…"}` | Not a valid contract-v1 result. The device does not retry |
+| `401` | `{"error":"…"}` | Missing or wrong token. The device does not retry |
+| `413` | `{"error":"…"}` | Body over 64 KB (a real result is at most about 5 KB) |
+| `503` | `{"error":"…"}` | `INGEST_TOKEN` is not set on the server, so uploads are off |
+
+`GET /api/health` answers `{"ok":true,"ingest":true|false}` without a token, which is handy for checking the URL from the board's setup.
+
+The token is a shared secret between the server and the board's `secrets.h`. Make a long random one, for example `openssl rand -hex 24`. Sums that don't add up are stored with a warning, as the brief asks; the warnings come back in the response and show on the game page.
+
+Test it from a computer:
+
+```sh
+curl -i -X POST "$URL/api/results" \
+  -H "Authorization: Bearer $INGEST_TOKEN" -H "Content-Type: application/json" \
+  --data-binary @fixtures/fixture-a.json
+```
+
+## Hosting on Vercel + Supabase
+
+The repo deploys as one Vercel Function (`api/index.ts`, which re-exports `src/vercel.ts`). `vercel.json` sends every path to it except the faction icons, which Vercel serves from `public/` directly. Results go in a Supabase table; the function talks to it with the server-side secret key, so the key never reaches a browser.
+
+One-time setup:
+
+1. **Supabase.** Create a project (the free plan is enough). In **SQL Editor**, run [`supabase/migrations/20261121000000_create_results.sql`](supabase/migrations/20261121000000_create_results.sql). It creates the `results` table with row level security on and no policies, so the browser keys can't read or write it. (With the Supabase CLI linked to the project, `supabase db push` does the same.)
+2. From **Project Settings → API keys**, note the project URL and a **secret** key (`sb_secret_…`), or the legacy `service_role` key.
+3. **Vercel.** Import the GitHub repo as a new project. Leave the framework preset as **Other**; `vercel.json` sets the rest.
+4. In the Vercel project's **Settings → Environment Variables**, add:
+
+   | Name | Value |
+   |---|---|
+   | `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+   | `SUPABASE_SECRET_KEY` | the secret key (or set `SUPABASE_SERVICE_ROLE_KEY` instead) |
+   | `INGEST_TOKEN` | a long random string; the same value goes in the board's `secrets.h` |
+
+5. Deploy (or redeploy after adding the variables). Check `https://<app>.vercel.app/api/health`: it should say `"ingest":true`.
+6. Put `https://<app>.vercel.app/api/results` and the token in the board's `secrets.h` (hardware-playground, `apps/bottlenose/c6/bottlenose_c6/`).
+
+Notes:
+
+- The example fixtures are **not** imported into Supabase. The game list starts empty and fills as the board uploads.
+- Vercel's install also tries to build `better-sqlite3`, which only the local server uses. It is an optional dependency, so a failure there does not fail the deploy.
+- Free Supabase projects pause after about a week without database activity. Opening the site counts. A paused project can be resumed from the Supabase dashboard; until then the pages and the upload return errors, and the board keeps its result and retries.
+
+### Running against a local Supabase
+
+With the Supabase CLI and Docker:
+
+```sh
+supabase start        # supabase/config.toml: only the database and REST API; applies supabase/migrations
+supabase status       # API URL and keys
+SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SECRET_KEY=<secret key> INGEST_TOKEN=dev npm run dev
+```
+
+`npm test` also runs `test/store-supabase.test.ts` against it when `SUPABASE_TEST_URL`, `SUPABASE_TEST_KEY` (secret key) and, for the RLS check, `SUPABASE_TEST_ANON_KEY` (publishable key) are set. Without them those tests are skipped.
 
 ## Test fixtures
 
@@ -63,7 +139,18 @@ npm run dev    # http://localhost:8080, restarts on file changes
 npm test
 ```
 
-The app reads `PORT` (default `8080`), `DATA_DIR` (default `./data`) and `FIXTURES_DIR` (default `./fixtures`) from the environment.
+The app reads these from the environment:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `8080` | Listen port (local server) |
+| `DATA_DIR` | `./data` | Where the SQLite file lives |
+| `FIXTURES_DIR` | `./fixtures` | Example games imported at startup |
+| `INGEST_TOKEN` | unset | Shared secret for `POST /api/results`; unset turns uploads off |
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`) | unset | When both are set, results live in Supabase instead of SQLite |
+| `IMPORT_FIXTURES` | `1` with SQLite, `0` with Supabase | Import the example games at startup |
+
+`.env.example` lists them. For local development, `INGEST_TOKEN=dev npm run dev` turns the upload endpoint on.
 
 ### Docker (the normal way to run it)
 
@@ -75,6 +162,8 @@ docker compose up -d --build  # build the image and start in the background
 ```
 
 Then open `http://<host-ip>:8080` from any phone or laptop on the same network (or `http://localhost:8080` on the host itself).
+
+To accept uploads from the board on the local network, put `INGEST_TOKEN=<token>` in the `.env` file next to `docker-compose.yml` and use `http://<host-ip>:8080/api/results` as the board's URL.
 
 | Task | Command |
 |---|---|

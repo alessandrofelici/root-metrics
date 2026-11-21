@@ -29,11 +29,11 @@ async function collect(source: FixtureResultSource) {
   return out;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "root-metrics-source-"));
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const s of stores.splice(0)) {
     try {
       s.close();
@@ -106,10 +106,10 @@ describe("ingest", () => {
     const source = new FixtureResultSource(fixturesDir, silentLogger());
 
     expect(await ingest(source, store)).toEqual({ inserted: 2, duplicates: 0 });
-    expect(store.list()).toHaveLength(2);
+    expect(await store.list()).toHaveLength(2);
 
     expect(await ingest(source, store)).toEqual({ inserted: 0, duplicates: 2 });
-    expect(store.list()).toHaveLength(2);
+    expect(await store.list()).toHaveLength(2);
   });
 
   it("stores parser warnings with the result", async () => {
@@ -124,7 +124,7 @@ describe("ingest", () => {
       inserted: 1,
       duplicates: 0,
     });
-    const stored = store.get(broken.game_id);
+    const stored = await store.get(broken.game_id);
     expect(stored?.warnings).toHaveLength(1);
     expect(stored?.warnings[0]).toContain("global_ms 1");
   });

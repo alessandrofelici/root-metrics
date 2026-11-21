@@ -37,16 +37,18 @@ export interface StoredResult {
   saved_at: string; // ISO 8601 UTC, set by the store
 }
 
+/** Async so a networked database (Supabase) and the local SQLite file share one interface. */
 export interface ResultStore {
-  /** Idempotent: de-duplicates by game_id. Returns true if newly inserted. */
-  save(r: GameResult, warnings?: string[]): boolean;
+  /** Idempotent: de-duplicates by game_id. Resolves true if newly inserted. */
+  save(r: GameResult, warnings?: string[]): Promise<boolean>;
   /** Newest first (by saved_at). */
-  list(): StoredResult[];
-  get(gameId: string): StoredResult | undefined;
-  close(): void;
+  list(): Promise<StoredResult[]>;
+  get(gameId: string): Promise<StoredResult | undefined>;
+  close(): Promise<void>;
 }
 
 export interface ResultSource {
-  /** Emits each parsed result a source receives. Only FixtureResultSource exists in the MVP. */
+  /** Emits each parsed result a source receives. FixtureResultSource reads bundled files; the
+   *  device's results arrive over HTTP instead (POST /api/results, see src/api.ts). */
   results(): AsyncIterable<{ result: GameResult; warnings: string[] }>;
 }

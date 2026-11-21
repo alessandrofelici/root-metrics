@@ -31,11 +31,11 @@ function track(s: SqliteResultStore): SqliteResultStore {
   return s;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "root-metrics-store-"));
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const s of stores.splice(0)) {
     try {
       s.close();
@@ -47,63 +47,63 @@ afterEach(() => {
 });
 
 describe("SqliteResultStore", () => {
-  it("stores a duplicate game_id once; second save returns false and leaves the row unchanged", () => {
+  it("stores a duplicate game_id once; second save returns false and leaves the row unchanged", async () => {
     const store = track(openStore(tmpDir));
-    expect(store.save(fixtureA, ["first"])).toBe(true);
-    const before = store.get(fixtureA.game_id);
+    expect(await store.save(fixtureA, ["first"])).toBe(true);
+    const before = await store.get(fixtureA.game_id);
 
     const changed: GameResult = { ...fixtureA, global_ms: 1 };
-    expect(store.save(changed, ["second"])).toBe(false);
+    expect(await store.save(changed, ["second"])).toBe(false);
 
-    expect(store.list()).toHaveLength(1);
-    expect(store.get(fixtureA.game_id)).toEqual(before);
-    expect(store.get(fixtureA.game_id)?.result.global_ms).toBe(666000);
+    expect(await store.list()).toHaveLength(1);
+    expect(await store.get(fixtureA.game_id)).toEqual(before);
+    expect((await store.get(fixtureA.game_id))?.result.global_ms).toBe(666000);
   });
 
-  it("get returns the stored result and warnings, undefined for an unknown id", () => {
+  it("get returns the stored result and warnings, undefined for an unknown id", async () => {
     const store = track(openStore(tmpDir));
-    store.save(fixtureA, ["turns_ms sum mismatch for seat 3"]);
+    await store.save(fixtureA, ["turns_ms sum mismatch for seat 3"]);
 
-    const got = store.get(fixtureA.game_id);
+    const got = await store.get(fixtureA.game_id);
     expect(got).toBeDefined();
     expect(got!.result).toEqual(fixtureA);
     expect(got!.warnings).toEqual(["turns_ms sum mismatch for seat 3"]);
     expect(Number.isNaN(Date.parse(got!.saved_at))).toBe(false);
 
-    expect(store.get("does-not-exist")).toBeUndefined();
+    expect(await store.get("does-not-exist")).toBeUndefined();
   });
 
-  it("defaults warnings to an empty array", () => {
+  it("defaults warnings to an empty array", async () => {
     const store = track(openStore(tmpDir));
-    store.save(fixtureA);
-    expect(store.get(fixtureA.game_id)?.warnings).toEqual([]);
+    await store.save(fixtureA);
+    expect((await store.get(fixtureA.game_id))?.warnings).toEqual([]);
   });
 
-  it("lists newest first", () => {
+  it("lists newest first", async () => {
     const store = track(openStore(tmpDir));
-    store.save(fixtureA);
-    store.save(otherGame);
-    expect(store.list().map((s) => s.result.game_id)).toEqual([otherGame.game_id, fixtureA.game_id]);
+    await store.save(fixtureA);
+    await store.save(otherGame);
+    expect((await store.list()).map((s) => s.result.game_id)).toEqual([otherGame.game_id, fixtureA.game_id]);
   });
 
-  it("survives close and reopen of the same file", () => {
+  it("survives close and reopen of the same file", async () => {
     const first = track(openStore(tmpDir));
-    first.save(fixtureA, ["w"]);
-    first.save(otherGame);
-    first.close();
+    await first.save(fixtureA, ["w"]);
+    await first.save(otherGame);
+    await first.close();
 
     const reopened = track(openStore(tmpDir));
-    expect(reopened.list().map((s) => s.result.game_id)).toEqual([otherGame.game_id, fixtureA.game_id]);
-    expect(reopened.get(fixtureA.game_id)?.result).toEqual(fixtureA);
-    expect(reopened.get(fixtureA.game_id)?.warnings).toEqual(["w"]);
-    expect(reopened.save(fixtureA)).toBe(false);
+    expect((await reopened.list()).map((s) => s.result.game_id)).toEqual([otherGame.game_id, fixtureA.game_id]);
+    expect((await reopened.get(fixtureA.game_id))?.result).toEqual(fixtureA);
+    expect((await reopened.get(fixtureA.game_id))?.warnings).toEqual(["w"]);
+    expect(await reopened.save(fixtureA)).toBe(false);
   });
 
-  it("creates the parent directory if missing", () => {
+  it("creates the parent directory if missing", async () => {
     const dbPath = path.join(tmpDir, "nested", "deeper", "rootclock.db");
     const store = track(new SqliteResultStore(dbPath));
     expect(fs.existsSync(path.dirname(dbPath))).toBe(true);
-    expect(store.save(fixtureA)).toBe(true);
+    expect(await store.save(fixtureA)).toBe(true);
     expect(fs.existsSync(dbPath)).toBe(true);
   });
 });

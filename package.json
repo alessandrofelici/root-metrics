@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx watch src/server.tsx",
@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.11",
-    "better-sqlite3": "^13.2.0",
+    "@supabase/supabase-js": "^2.119.2",
     "hono": "^4.13.19",
     "zod": "^4.6.7"
   },
@@ -25,5 +25,8 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.1"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^13.2.0"
   }
 }
