@@ -1,4 +1,4 @@
-// The app as one Vercel Function (api/index.ts re-exports these). Results live in Supabase:
+// The app as one Vercel Function (api/index.js re-exports the compiled dist/vercel.js). Results live in Supabase:
 // SUPABASE_URL plus SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) must be set in the
 // project's environment variables, and INGEST_TOKEN for the device. The bundled example games
 // are not imported here.

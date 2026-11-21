@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import { parseGameResult } from "../src/parse.js";
 import { SqliteResultStore } from "../src/store.js";
@@ -30,15 +30,20 @@ afterEach(async () => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-async function get(p: string): Promise<{ status: number; body: string }> {
-  const res = await createApp(store).request(p);
+async function get(p: string, timeZone = "UTC"): Promise<{ status: number; body: string }> {
+  const res = await createApp(store, { timeZone }).request(p);
   return { status: res.status, body: await res.text() };
 }
 
 describe("with both fixtures stored", () => {
   beforeEach(async () => {
+    // Pin the receive time: fixture A has no ended_at, so its date is when it was saved.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-21T19:05:00Z"));
     await store.save(loadFixture("fixture-a.json"));
+    vi.setSystemTime(new Date("2026-11-21T19:06:00Z"));
     await store.save(loadFixture("fixture-b.json"));
+    vi.useRealTimers();
   });
 
   it("GET / lists both games with count, time and date", async () => {
@@ -50,8 +55,9 @@ describe("with both fixtures stored", () => {
     expect(body).toContain(`href="/games/${ID_B}"`);
     expect(body).toContain("3 players");
     expect(body).toContain("4 players");
-    expect(body).toContain("date unknown");
-    expect(body).toContain("2026-11-21T20:14:05");
+    expect(body).toContain("Sat, Nov 21, 2026, 7:05 PM UTC"); // A: received time
+    expect(body).toContain("Sat, Nov 21, 2026, 8:14 PM"); // B: the device's ended_at
+    expect(body).not.toContain("date unknown");
     expect(body).toContain("11:06"); // A global 666000
     expect(body).toContain("7:40"); // B global 460000
     // newest first: B was saved last
@@ -65,7 +71,8 @@ describe("with both fixtures stored", () => {
       expect(body).toContain(s);
     }
     expect(body).toContain("Turn limit: 2:00");
-    expect(body).toContain("date unknown");
+    expect(body).toContain("Date: Sat, Nov 21, 2026, 7:05 PM UTC");
+    expect(body).not.toContain("Ended");
     expect(body).toContain("Seat 1");
     expect(body).toContain("Seat 3");
     expect(body).toContain("<li>1:02</li>");
@@ -89,7 +96,23 @@ describe("with both fixtures stored", () => {
     expect(body).toContain("Corvid Conspiracy");
     expect(body).toContain("Lorenzo");
     expect(body).toContain("Seat 4");
-    expect(body).toContain("2026-11-21T20:14:05");
+    expect(body).toContain("Date: Sat, Nov 21, 2026, 8:14 PM");
+  });
+
+  it("shows the received time in the configured time zone", async () => {
+    const list = await get("/", "America/New_York");
+    expect(list.body).toContain("Sat, Nov 21, 2026, 2:05 PM EST");
+    const detail = await get(`/games/${ID_A}`, "America/New_York");
+    expect(detail.body).toContain("Date: Sat, Nov 21, 2026, 2:05 PM EST");
+  });
+
+  it("a repeat upload keeps the first received time", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-22T09:00:00Z"));
+    expect(await store.save(loadFixture("fixture-a.json"))).toBe(false);
+    vi.useRealTimers();
+    const { body } = await get(`/games/${ID_A}`);
+    expect(body).toContain("Date: Sat, Nov 21, 2026, 7:05 PM UTC");
   });
 
   it("unknown game id → 404", async () => {

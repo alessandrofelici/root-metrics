@@ -13,6 +13,7 @@ services:
       INGEST_TOKEN: ${INGEST_TOKEN:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+      DISPLAY_TIME_ZONE: ${DISPLAY_TIME_ZONE:-}
     volumes:
       - ./data:/data
     restart: unless-stopped

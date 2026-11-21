@@ -5,10 +5,10 @@ import { Hono } from "hono";
 import type { Child } from "hono/jsx";
 import { html } from "hono/html";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { PUBLIC_DIR } from "./config.js";
+import { DISPLAY_TIME_ZONE, PUBLIC_DIR } from "./config.js";
 import { factionIconUrl, factionName } from "./factions.js";
 import { mountApi } from "./api.js";
-import { averagePerPlayerMs, formatDuration } from "./format.js";
+import { averagePerPlayerMs, formatDuration, formatGameDate } from "./format.js";
 import type { GameResult, Player, ResultStore, StoredResult } from "./types.js";
 
 // Constant CSS rendered as escaped text: keep it free of quotes, `<`, `>` and `&`.
@@ -38,8 +38,8 @@ function page(title: string, body: Child) {
   )}`;
 }
 
-function endedAt(r: GameResult): string {
-  return r.ended_at ?? "date unknown";
+function gameDate(s: StoredResult, timeZone: string): string {
+  return formatGameDate(s.result.ended_at, s.saved_at, timeZone);
 }
 
 function average(r: GameResult): string {
@@ -57,7 +57,7 @@ function gameHref(gameId: string): string {
   return `/games/${encodeURIComponent(gameId)}`;
 }
 
-function GameList({ games }: { games: StoredResult[] }) {
+function GameList({ games, timeZone }: { games: StoredResult[]; timeZone: string }) {
   return (
     <>
       <h1>Games</h1>
@@ -65,18 +65,22 @@ function GameList({ games }: { games: StoredResult[] }) {
         <p>No games yet.</p>
       ) : (
         <ul class="games">
-          {games.map(({ result: r }) => (
-            <li>
-              <a href={gameHref(r.game_id)}>
-                {endedAt(r)} · {r.players.length} {r.players.length === 1 ? "player" : "players"} ·{" "}
-                {formatDuration(r.global_ms)} · avg {average(r)} per player
-              </a>
-              <br />
-              {r.players.map((p) => (
-                <FactionIcon faction={p.faction} />
-              ))}
-            </li>
-          ))}
+          {games.map((stored) => {
+            const r = stored.result;
+            return (
+              <li>
+                <a href={gameHref(r.game_id)}>
+                  {gameDate(stored, timeZone)} · {r.players.length}{" "}
+                  {r.players.length === 1 ? "player" : "players"} · {formatDuration(r.global_ms)} · avg{" "}
+                  {average(r)} per player
+                </a>
+                <br />
+                {r.players.map((p) => (
+                  <FactionIcon faction={p.faction} />
+                ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </>
@@ -122,7 +126,7 @@ function PlayerBlock({ player: p, limitMs }: { player: Player; limitMs: number |
   );
 }
 
-function GameDetail({ stored }: { stored: StoredResult }) {
+function GameDetail({ stored, timeZone }: { stored: StoredResult; timeZone: string }) {
   const r = stored.result;
   return (
     <>
@@ -131,7 +135,7 @@ function GameDetail({ stored }: { stored: StoredResult }) {
       </p>
       <h1>Game {r.game_id}</h1>
       <p>
-        Ended: {endedAt(r)}
+        Date: {gameDate(stored, timeZone)}
         <br />
         Global time: {formatDuration(r.global_ms)}
         <br />
@@ -173,11 +177,14 @@ export interface AppOptions {
   serveStaticFiles?: boolean;
   /** Shared secret the device sends as `Authorization: Bearer <token>`. Unset: ingest is off. */
   ingestToken?: string;
+  /** IANA time zone for dates on the pages (default DISPLAY_TIME_ZONE). */
+  timeZone?: string;
 }
 
 /** Builds the web app over `store`. No side effects; the caller serves it. */
 export function createApp(store: ResultStore, opts: AppOptions = {}): Hono {
   const app = new Hono();
+  const timeZone = opts.timeZone ?? DISPLAY_TIME_ZONE;
 
   // Bundled static assets (faction icons) from public/, served under /static/.
   if (opts.serveStaticFiles ?? true) {
@@ -193,12 +200,12 @@ export function createApp(store: ResultStore, opts: AppOptions = {}): Hono {
 
   mountApi(app, store, { ingestToken: opts.ingestToken });
 
-  app.get("/", async (c) => c.html(page("Games", <GameList games={await store.list()} />)));
+  app.get("/", async (c) => c.html(page("Games", <GameList games={await store.list()} timeZone={timeZone} />)));
 
   app.get("/games/:gameId", async (c) => {
     const stored = await store.get(c.req.param("gameId"));
     if (!stored) return c.html(page("Game not found", <NotFound />), 404);
-    return c.html(page(`Game ${stored.result.game_id}`, <GameDetail stored={stored} />));
+    return c.html(page(`Game ${stored.result.game_id}`, <GameDetail stored={stored} timeZone={timeZone} />));
   });
 
   app.notFound((c) => c.html(page("Not found", <NotFound />), 404));

@@ -28,6 +28,7 @@ It runs two ways, with the same pages and API:
 - **Hosted or local server.** There are no user accounts. The pages are public to anyone with the URL; writing needs the device's shared token (`INGEST_TOKEN`). Results live in Supabase when hosted, or in the SQLite file locally.
 - **Faction icons.** The brief says "no faction artwork"; this project shows the bundled icons from `public/factions/` (see below).
 - **One extra metric: average time per player**, the game's `global_ms` divided by the number of players. It is shown on both pages. No other statistics.
+- **Games are dated by when the server received them.** The board sends `ended_at: null` (its clock isn't set), so both pages show the time the game first reached the server, labelled "Date", in `DISPLAY_TIME_ZONE`. A retried upload keeps the first time. If the board ever sends an `ended_at`, that is shown instead, as written. The board can hold a game while offline, so the date can be later than when the game actually ended.
 - **Over-limit turns are marked** on the detail page when `turn_limit_ms` is set (bold, "(over limit)", plus a per-player count). A truncated player's last turn is never marked, because it combines several real turns.
 
 - **HTTP ingest.** The device posts each result to `POST /api/results` ([Device API](#device-api)). The bundled fixtures still go through `FixtureResultSource`, and only into a local database.
@@ -86,7 +87,7 @@ curl -i -X POST "$URL/api/results" \
 
 ## Hosting on Vercel + Supabase
 
-The repo deploys as one Vercel Function (`api/index.ts`, which re-exports `src/vercel.ts`). `vercel.json` sends every path to it except the faction icons, which Vercel serves from `public/` directly. Results go in a Supabase table; the function talks to it with the server-side secret key, so the key never reaches a browser.
+The repo deploys as one Vercel Function (`api/index.js`, which re-exports the compiled `dist/vercel.js`). `vercel.json` sends every path to it except the faction icons, which Vercel serves from `public/` directly. Results go in a Supabase table; the function talks to it with the server-side secret key, so the key never reaches a browser.
 
 One-time setup:
 
@@ -100,6 +101,7 @@ One-time setup:
    | `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
    | `SUPABASE_SECRET_KEY` | the secret key (or set `SUPABASE_SERVICE_ROLE_KEY` instead) |
    | `INGEST_TOKEN` | a long random string; the same value goes in the board's `secrets.h` |
+   | `DISPLAY_TIME_ZONE` | your time zone, e.g. `America/New_York` (otherwise dates show in UTC) |
 
 5. Deploy (or redeploy after adding the variables). Check `https://<app>.vercel.app/api/health`: it should say `"ingest":true`.
 6. Put `https://<app>.vercel.app/api/results` and the token in the board's `secrets.h` (hardware-playground, `apps/bottlenose/c6/bottlenose_c6/`).
@@ -148,6 +150,7 @@ The app reads these from the environment:
 | `FIXTURES_DIR` | `./fixtures` | Example games imported at startup |
 | `INGEST_TOKEN` | unset | Shared secret for `POST /api/results`; unset turns uploads off |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`) | unset | When both are set, results live in Supabase instead of SQLite |
+| `DISPLAY_TIME_ZONE` | the server's zone (UTC on Vercel and in Docker) | IANA time zone for game dates on the pages, e.g. `America/New_York` |
 | `IMPORT_FIXTURES` | `1` with SQLite, `0` with Supabase | Import the example games at startup |
 
 `.env.example` lists them. For local development, `INGEST_TOKEN=dev npm run dev` turns the upload endpoint on.
