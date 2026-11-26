@@ -44,6 +44,8 @@ export function page(title: string, body: Child, opts: { slide?: "prev" | "next"
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="light dark" />
         <title>{title}</title>
+        <link rel="icon" href="/static/favicon.ico" sizes="32x32" />
+        <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
         <link rel="stylesheet" href="/static/app.css" />
         {(opts.styles ?? []).map((href) => (
           <link rel="stylesheet" href={href} />

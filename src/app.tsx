@@ -45,6 +45,9 @@ export function createApp(store: ResultStore, opts: AppOptions = {}): Hono {
     );
   }
 
+  // Browsers also ask for /favicon.ico directly. Vercel serves public/favicon.ico there itself.
+  app.get("/favicon.ico", (c) => c.redirect("/static/favicon.ico", 301));
+
   mountApi(app, store, { ingestToken: opts.ingestToken });
 
   const snapshot = async (): Promise<Snapshot> => buildSnapshot(await store.list(), timeZone);
