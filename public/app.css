@@ -228,15 +228,23 @@ a.day:hover { text-decoration: none; outline: 1px solid var(--color-accent); }
 .game-summary { display: flex; flex-direction: column; gap: var(--space-24); }
 .share { display: flex; flex-direction: column; gap: var(--space-12); }
 .donut-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-24); }
-.donut { flex: none; }
+.donut { flex: none; overflow: visible; }
 .donut circle { fill: none; }
-.donut-seg { stroke: var(--faction); }
+.donut-seg { stroke: var(--faction); cursor: pointer; transition: opacity 120ms ease, stroke-width 120ms ease; }
+/* Hover (or tap) a segment: it thickens, the rest fade, its name and share replace the game time. */
+.donut-center { pointer-events: none; transition: opacity 120ms ease; }
+.donut-center-player { opacity: 0; }
+.donut:has(.donut-seg:hover) .donut-center-default { opacity: 0; }
+.donut-part:has(.donut-seg:hover) .donut-center-player { opacity: 1; }
+.donut:has(.donut-seg:hover) .donut-seg:not(:hover) { opacity: 0.35; }
+.donut-seg:hover { stroke-width: 28px; }
+@media (prefers-reduced-motion: reduce) { .donut-seg, .donut-center { transition: none; } }
 .donut-label { font-family: var(--font-mono); font-weight: 500; font-size: 9px; letter-spacing: 0.06em; fill: var(--color-text-muted); }
 .donut-value { font-family: var(--font-mono); font-size: 13px; fill: var(--color-text); }
 .donut-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); flex: 1 1 160px; min-width: 0; }
-.donut-legend li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; column-gap: var(--space-8); }
+.donut-legend li { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: var(--space-8); }
 .donut-name { overflow-wrap: anywhere; }
-.donut-time { grid-column: 2 / 4; }
+.donut-time { grid-column: 2; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; background: var(--faction, var(--color-text-muted)); }
 /* Faction colours (factionTone in ui.tsx sets the class). */
 .faction-marquise { --faction: var(--color-faction-marquise); }

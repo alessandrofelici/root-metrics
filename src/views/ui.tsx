@@ -304,13 +304,15 @@ export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs
 }
 
 /** Who used the time (C6): a donut in seat order from 12 o'clock, each player in their faction's
- *  colour, game time in the middle. The legend carries every name, share and time, so identity
- *  never rests on colour alone. */
+ *  colour, game time in the middle. Hovering (or tapping) a segment highlights it and puts that
+ *  player's name and share in the middle instead (CSS only). The legend carries every name and
+ *  time, and the accessible name every share, so nothing rests on colour or hover alone. */
 export function TimeShare({ g }: { g: GameFacts }) {
   const sum = g.players.reduce((n, p) => n + p.totalMs, 0) || 1;
   const top = [...g.players].sort((a, b) => b.totalMs - a.totalMs)[0]!;
   const size = 156, sw = 22, r = (size - sw) / 2, c = 2 * Math.PI * r, mid = size / 2;
   const gap = g.players.length > 1 ? 2 : 0;
+  const short = (name: string) => (name.length > 14 ? `${name.slice(0, 13)}…` : name);
   let start = 0;
   const segs = g.players.map((p) => {
     const frac = p.totalMs / sum;
@@ -323,20 +325,25 @@ export function TimeShare({ g }: { g: GameFacts }) {
       <Takeaway chart="C6">{`${top.nickname} used the most time: ${formatPercent(top.totalMs / sum)} of the game.`}</Takeaway>
       <div class="donut-wrap">
         <svg class="donut" viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={g.players.map((p) => `${p.nickname} ${formatPercent(p.totalMs / sum)}`).join(", ")}>
+          <g class="donut-center donut-center-default">
+            <text class="donut-label" x={mid} y={mid - 9} text-anchor="middle">GAME TIME</text>
+            <text class="donut-value" x={mid} y={mid + 9} text-anchor="middle">{formatTotal(g.globalMs)}</text>
+          </g>
           {segs.map((s) => (
-            <circle class={`donut-seg ${factionTone(s.p.faction)}`} cx={mid} cy={mid} r={r2(r)} stroke-width={sw} stroke-dasharray={`${r2(s.len)} ${r2(c - s.len)}`} stroke-dashoffset={r2(s.offset)} transform={`rotate(-90 ${mid} ${mid})`}>
-              <title>{`${s.p.nickname}: ${formatPercent(s.frac)} · ${formatTotal(s.p.totalMs)}`}</title>
-            </circle>
+            <g class={`donut-part ${factionTone(s.p.faction)}`}>
+              <circle class="donut-seg" cx={mid} cy={mid} r={r2(r)} stroke-width={sw} stroke-dasharray={`${r2(s.len)} ${r2(c - s.len)}`} stroke-dashoffset={r2(s.offset)} transform={`rotate(-90 ${mid} ${mid})`} />
+              <g class="donut-center donut-center-player">
+                <text class="donut-label" x={mid} y={mid - 9} text-anchor="middle">{short(s.p.nickname).toUpperCase()}</text>
+                <text class="donut-value" x={mid} y={mid + 9} text-anchor="middle">{formatPercent(s.frac)}</text>
+              </g>
+            </g>
           ))}
-          <text class="donut-label" x={mid} y={mid - 9} text-anchor="middle">GAME TIME</text>
-          <text class="donut-value" x={mid} y={mid + 9} text-anchor="middle">{formatTotal(g.globalMs)}</text>
         </svg>
         <ul class="donut-legend">
           {g.players.map((p) => (
             <li>
               <span class={`dot ${factionTone(p.faction)}`} />
               <span class="donut-name">{p.nickname}</span>
-              <span class="num">{formatPercent(p.totalMs / sum)}</span>
               <span class="donut-time small muted">{formatTotal(p.totalMs)}</span>
             </li>
           ))}

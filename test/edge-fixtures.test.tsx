@@ -93,8 +93,11 @@ describe("edge-case fixtures", () => {
     const r = load("unknown-faction-nickname.json");
     await store.save(r);
     const html = await page(r.game_id);
-    expect(html).toContain('class="donut-seg faction-lilypad"');
-    expect(html).toContain('class="donut-seg faction-unknown"');
+    expect(html).toContain('class="donut-part faction-lilypad"');
+    expect(html).toContain('class="donut-part faction-unknown"');
+    // Each segment carries its own share for the middle of the donut (shown on hover), escaped.
+    expect(html).toMatch(/class="donut-center donut-center-player"><text[^>]*>&lt;B&gt;ROBIN&lt;\/B&gt;<\/text><text[^>]*>35%</);
+    expect(html).not.toMatch(/<ul class="donut-legend">.*?%.*?<\/ul>/);
     expect(html).not.toContain("faction-otters");
     expect(html).not.toMatch(/seat-\d/);
   });
