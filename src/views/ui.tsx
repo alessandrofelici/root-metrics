@@ -62,10 +62,6 @@ export function Header() {
         <HomeIcon />
         <span>Root Metrics</span>
       </a>
-      <a class="stats-link" href="/stats">
-        <span>Stats</span>
-        <ChevronRight />
-      </a>
     </header>
   );
 }
