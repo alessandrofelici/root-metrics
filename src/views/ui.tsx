@@ -260,10 +260,10 @@ export function CalendarMonth({ month, snap, today }: { month: string; snap: Sna
 }
 
 // ---------- Charts ----------
-/** Turn-by-turn bars. Over the limit: solid. Within: outlined. A truncated player's last turn
- *  (several turns summed) is dashed and never counted as over. The limit line is drawn only for a
- *  player with a turn over it; otherwise it would only squash the bars. The plot is at least
- *  MIN_TURN_SLOTS turns wide, so a short game doesn't stretch each bar across the chart. */
+/** Turn-by-turn bars, both filled: over the limit in the over colour, within it in green. A
+ *  truncated player's last turn (several turns summed) is dashed and never counted as over. No
+ *  limit line: the colour already says which turns went over, and the y-axis fits the turns. The
+ *  plot is at least MIN_TURN_SLOTS turns wide, so a short game doesn't stretch each bar across. */
 const MIN_TURN_SLOTS = 6;
 
 export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs: number | null; mini?: boolean }) {
@@ -273,8 +273,7 @@ export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs
   const top = mini ? 2 : 8;
   const bottom = mini ? 0 : 18;
   const turns = p.turnsMs;
-  const lineMs = limitMs !== null && p.overLimit > 0 ? limitMs : null;
-  const yMax = Math.ceil(Math.max(...turns, lineMs ?? 0, 60_000) / 60_000) * 60_000;
+  const yMax = Math.ceil(Math.max(...turns, 60_000) / 60_000) * 60_000;
   const plotH = H - top - bottom;
   const step = (W - left) / Math.max(MIN_TURN_SLOTS, turns.length);
   const bw = Math.max(1, step * 0.72);
@@ -299,12 +298,6 @@ export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs
           </rect>
         );
       })}
-      {lineMs !== null ? (
-        <>
-          <line class="limit" x1={left} x2={W} y1={r2(y(lineMs))} y2={r2(y(lineMs))} />
-          {mini ? null : <text class="axis limit-label" x="0" y={r2(y(lineMs) + 4)}>{formatTurn(lineMs)}</text>}
-        </>
-      ) : null}
       {mini ? null : turns.map((_, i) => (i % labelEvery === 0 || i === turns.length - 1 ? <text class="axis" x={r2(left + i * step + step / 2)} y={H - 4} text-anchor="middle">{String(i + 1)}</text> : null))}
     </svg>
   );

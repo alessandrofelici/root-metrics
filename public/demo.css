@@ -40,3 +40,8 @@
 .seat-2 { background: var(--color-seat-2); }
 .seat-3 { background: var(--color-seat-3); }
 .seat-4 { background: var(--color-seat-4); }
+
+/* ---------- "Before": outlined turn bars with a limit line ---------- */
+.old-turn-bars .bar.within { fill: none; stroke: var(--color-bar-within); stroke-width: 1.5; }
+.old-turn-bars .limit { stroke: var(--color-bar-over); stroke-width: 1; }
+.old-turn-bars .limit-label { fill: var(--color-bar-over); }

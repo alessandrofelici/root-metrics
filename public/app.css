@@ -277,10 +277,8 @@ a.day:hover { text-decoration: none; outline: 1px solid var(--color-accent); }
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
 .chart .axis { font-family: var(--font-mono); font-size: 9px; fill: var(--color-text-muted); }
 .chart .axis-line { stroke: var(--color-line); stroke-width: 1; }
-.chart .limit { stroke: var(--color-bar-over); stroke-width: 1; }
-.chart .limit-label { fill: var(--color-bar-over); }
 .bar.over { fill: var(--color-bar-over); }
-.bar.within { fill: none; stroke: var(--color-bar-within); stroke-width: 1.5; }
+.bar.within { fill: var(--color-bar-within); }
 .bar.folded { fill: none; stroke: var(--color-text-muted); stroke-width: 1.5; stroke-dasharray: 3 2; }
 .turn-bars.mini { max-width: 280px; }
 .pace-line { fill: none; stroke: var(--color-accent); stroke-width: 2; }

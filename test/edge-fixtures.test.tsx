@@ -75,15 +75,15 @@ describe("edge-case fixtures", () => {
     expect(html).toContain("<title>Turn 2: 0:58</title>");
   });
 
-  it("limit line only for a player with a turn over it; bars are at least 6 turns wide", async () => {
+  it("no limit line on turn bars; bars are at least 6 turns wide", async () => {
     const r = load("single-turn.json");
     await store.save(r);
     const html = await page(r.game_id);
     const charts = html.match(/<svg class="chart turn-bars"[\s\S]*?<\/svg>/g) ?? [];
     expect(charts).toHaveLength(2);
     const byName = (n: string) => charts.find((c) => c.includes(`aria-label="${n}:`))!;
-    expect(byName("Lorenzo")).toContain('class="limit"'); // 1:01 went over 1:00
-    expect(byName("Ahmed")).not.toContain('class="limit"'); // never over: no line, no squashed bars
+    expect(html).not.toContain('class="limit"');
+    expect(byName("Lorenzo")).toContain('"bar over"'); // 1:01 went over 1:00: still marked by colour
     // One turn on a 320-wide plot with a 34 px axis: one of six slots, not the whole width.
     const w = Number(/<rect class="bar [a-z]+" data-turn="1"[^>]*width="([\d.]+)"/.exec(byName("Ahmed"))![1]);
     expect(w).toBeCloseTo(((320 - 34) / 6) * 0.72, 1);

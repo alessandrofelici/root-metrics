@@ -91,7 +91,7 @@ function OldTurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs: nu
   const y = (ms: number) => top + plotH - (ms / yMax) * plotH;
   const labelEvery = turns.length <= 16 ? 1 : Math.ceil(turns.length / 8);
   return (
-    <svg class={mini ? "chart turn-bars mini" : "chart turn-bars"} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${p.nickname}: ${turns.length} turns, longest ${formatTurn(Math.max(...turns))}`} data-chart="C14">
+    <svg class={mini ? "chart turn-bars old-turn-bars mini" : "chart turn-bars old-turn-bars"} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${p.nickname}: ${turns.length} turns, longest ${formatTurn(Math.max(...turns))}`} data-chart="C14">
       {mini ? null : (
         <>
           <line class="axis-line" x1={left} x2={W} y1={y(0)} y2={y(0)} />
@@ -292,12 +292,12 @@ export function VisualSwitchesPage({ snap }: { snap: Snapshot }) {
       ),
     },
     {
-      id: "turn-bars", title: "Turn bars → no limit line when never over, at least 6 turns wide",
+      id: "turn-bars", title: "Turn bars → filled, no limit line, at least 6 turns wide",
       el: (n, id, title) => (
         <Switch id={id} n={n} title={title} where={`Game page → each player's turns (rows on phones, the table on wide screens). Shown for ${tb.p.nickname} on ${dayLabel(tb.g.day)}.`} status="In the app"
           now={<div class="group"><OldTurnBars p={tb.p} limitMs={tb.g.limitMs} /><OldTurnBars p={tb.p} limitMs={tb.g.limitMs} mini /></div>}
           proposed={<div class="group"><TurnBars p={tb.p} limitMs={tb.g.limitMs} /><TurnBars p={tb.p} limitMs={tb.g.limitMs} mini /></div>}
-          why="A player who never went over the limit gets no limit line, so the y-axis fits their turns. A game with few turns no longer stretches each bar across the chart. Full-size chart, then the table's mini version." />
+          why="Turns within the limit are filled green, turns over it keep the over colour, and there is no limit line, so the y-axis fits the turns. A game with few turns no longer stretches each bar across the chart. Full-size chart, then the table's mini version." />
       ),
     },
   ];
