@@ -196,9 +196,15 @@ a.day:hover { text-decoration: none; outline: 1px solid var(--color-accent); }
 .share { display: flex; flex-direction: column; gap: var(--space-12); }
 .share-bar { display: flex; gap: var(--space-4); height: 14px; }
 .share-bar .seg { border-radius: 3px; min-width: 4px; }
-.share-labels { list-style: none; margin: 0; padding: 0; display: flex; gap: var(--space-4); }
-.share-labels li { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex-basis: 0; }
-.share-name { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; overflow-wrap: anywhere; }
+/* Labels sit under their segments (flex-grow ∝ time, set inline) but never get narrower than
+   their longest word: the default min-width:auto is the min-content width, capped at the row by
+   max-width. When names don't fit on one row they wrap to a second row instead of squeezing.
+   break-word (unlike anywhere) leaves min-content alone, so it only splits a single word that is
+   wider than the whole row. */
+.share-labels { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-8) var(--space-12); }
+.share-labels li { display: flex; flex-direction: column; gap: 2px; flex-basis: 0; max-width: 100%; }
+.share-name { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.share-nick { min-width: 0; overflow-wrap: break-word; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .seat-1 { background: var(--color-seat-1); }
 .seat-2 { background: var(--color-seat-2); }

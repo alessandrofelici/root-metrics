@@ -293,7 +293,7 @@ export function TimeShare({ g }: { g: GameFacts }) {
           <li style={`flex-grow:${Math.max(p.totalMs, sum * 0.12)}`}>
             <span class="share-name">
               <span class={`dot seat-${p.seat}`} />
-              {p.nickname}
+              <span class="share-nick">{p.nickname}</span>
             </span>
             <span class="label">{formatTotal(p.totalMs)}</span>
           </li>
