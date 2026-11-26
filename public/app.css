@@ -282,7 +282,9 @@ a.day:hover { text-decoration: none; outline: 1px solid var(--color-accent); }
 .players-table td:last-child { width: 300px; }
 
 /* Charts */
-.chart { width: 100%; height: auto; display: block; overflow: visible; }
+/* SVG charts scale with their width, text included, so they stop growing at 480px (1.5x their
+   drawn size); otherwise a desktop card blows them up to about 3x. */
+.chart { width: 100%; max-width: 480px; height: auto; display: block; overflow: visible; }
 .chart .axis { font-family: var(--font-mono); font-size: 9px; fill: var(--color-text-muted); }
 .chart .axis-line { stroke: var(--color-line); stroke-width: 1; }
 .bar.over { fill: var(--color-bar-over); }
