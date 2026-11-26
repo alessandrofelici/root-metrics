@@ -171,6 +171,18 @@ describe("with both fixtures stored", () => {
     expect(stats.body).toContain('data-chart="C13"');
   });
 
+  it("who plays what: all three views on the page, switched by radios, not links", async () => {
+    const { body } = await get("/stats/players");
+    expect(body).not.toContain("?view=");
+    for (const k of ["games", "speed", "wins"]) expect(body).toContain(`class="view-panel view-${k}`);
+    expect(body).toMatch(/id="mv-games" value="games" checked/);
+    expect(body).toContain('class="view-panel view-games default"');
+    const wins = await get("/stats/players?view=wins");
+    expect(wins.body).toMatch(/id="mv-wins" value="wins" checked/);
+    expect(wins.body).toContain('class="view-panel view-wins default"');
+    expect(wins.body).toMatch(/<details class="disclosure" data-chart="C9 C10 W4" open/);
+  });
+
   it("player and faction pages: case-insensitive names, unknown ones are not found", async () => {
     expect((await get("/players/ALEX")).status).toBe(200);
     expect((await get("/players/nobody")).status).toBe(404);

@@ -222,6 +222,7 @@ export function GamesStatsPage({ snap }: { snap: Snapshot }) {
 
 // ---------- Players ----------
 type MatrixView = "games" | "speed" | "wins";
+const MATRIX_VIEWS = ["games", "speed", "wins"] as const;
 
 export function PlayersPage({ snap, view }: { snap: Snapshot; view: MatrixView | undefined }) {
   const games = statGames(snap);
@@ -247,26 +248,38 @@ export function PlayersPage({ snap, view }: { snap: Snapshot; view: MatrixView |
           <Scatter points={points} />
         </Disclosure>
         <Disclosure title="Who plays what" summary="Games, speed and wins for each player and faction" chart="C9 C10 W4" open={view !== undefined}>
-          <nav class="segmented" aria-label="Show">
-            {(["games", "speed", "wins"] as const).map((k) => (
-              <a href={`/stats/players?view=${k}`} aria-current={k === v ? "true" : undefined}>{k === "games" ? "Games" : k === "speed" ? "Speed" : "Wins"}</a>
+          {/* All three views are rendered; the radios pick one with CSS, so switching doesn't
+              reload the page and needs no JavaScript. ?view= still picks the one shown first. */}
+          <div class="views">
+            <fieldset class="segmented">
+              <legend class="visually-hidden">Show</legend>
+              {MATRIX_VIEWS.map((k) => (
+                <label>
+                  <input class="visually-hidden" type="radio" name="matrix-view" id={`mv-${k}`} value={k} checked={k === v} />
+                  <span>{k === "games" ? "Games" : k === "speed" ? "Speed" : "Wins"}</span>
+                </label>
+              ))}
+            </fieldset>
+            {MATRIX_VIEWS.map((k) => (
+              <div class={`view-panel view-${k}${k === v ? " default" : ""}`}>
+                <HeatMatrix
+                  columns={factions.map((f) => ({ key: f.key, head: <FactionIcon faction={f.key} size={22} />, title: factionName(f.key) }))}
+                  rows={players.map((p) => ({
+                    key: p.key,
+                    label: p.name,
+                    cells: factions.map((f) => {
+                      const fp = f.players.find((x) => x.key === p.key);
+                      if (!fp) return null;
+                      return k === "games" ? fp.games : k === "wins" ? fp.wins : mean(fp.turnsMs);
+                    }),
+                  }))}
+                  show={k === "speed" ? formatAvgTurn : String}
+                  lo={k === "games" ? "fewer games" : k === "wins" ? "fewer wins" : "faster"}
+                  hi={k === "games" ? "more games" : k === "wins" ? "more wins" : "slower"}
+                />
+              </div>
             ))}
-          </nav>
-          <HeatMatrix
-            columns={factions.map((f) => ({ key: f.key, head: <FactionIcon faction={f.key} size={22} />, title: factionName(f.key) }))}
-            rows={players.map((p) => ({
-              key: p.key,
-              label: p.name,
-              cells: factions.map((f) => {
-                const fp = f.players.find((x) => x.key === p.key);
-                if (!fp) return null;
-                return v === "games" ? fp.games : v === "wins" ? fp.wins : mean(fp.turnsMs);
-              }),
-            }))}
-            show={v === "speed" ? formatAvgTurn : String}
-            lo={v === "games" ? "fewer games" : v === "wins" ? "fewer wins" : "faster"}
-            hi={v === "games" ? "more games" : v === "wins" ? "more wins" : "slower"}
-          />
+          </div>
         </Disclosure>
       </div>
     </div>
