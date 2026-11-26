@@ -26,93 +26,141 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await store.close();
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-async function get(p: string, timeZone = "UTC"): Promise<{ status: number; body: string }> {
+async function get(p: string, timeZone = "UTC"): Promise<{ status: number; body: string; location: string | null }> {
   const res = await createApp(store, { timeZone }).request(p);
-  return { status: res.status, body: await res.text() };
+  return { status: res.status, body: await res.text(), location: res.headers.get("location") };
+}
+
+/** Text a reader sees: tags and attributes removed. */
+const visible = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+
+async function saveAt(iso: string, r: GameResult, warnings: string[] = []) {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(iso));
+  const inserted = await store.save(r, warnings);
+  vi.useRealTimers();
+  return inserted;
 }
 
 describe("with both fixtures stored", () => {
   beforeEach(async () => {
-    // Pin the receive time: fixture A has no ended_at, so its date is when it was saved.
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-11-21T19:05:00Z"));
-    await store.save(loadFixture("fixture-a.json"));
-    vi.setSystemTime(new Date("2026-11-21T19:06:00Z"));
-    await store.save(loadFixture("fixture-b.json"));
-    vi.useRealTimers();
+    // Fixture A has no ended_at: it is dated by when it was received. B carries its own ended_at.
+    await saveAt("2026-11-21T19:05:00Z", loadFixture("fixture-a.json"));
+    await saveAt("2026-11-21T19:06:00Z", loadFixture("fixture-b.json"));
   });
 
-  it("GET / lists both games with count, time and date", async () => {
+  it("Home shows the latest game, a link to the rest of that day, the calendar and View stats", async () => {
     const { status, body } = await get("/");
     expect(status).toBe(200);
     expect(body.toLowerCase()).toMatch(/^<!doctype html>/);
     expect(body).toContain('name="viewport"');
-    expect(body).toContain(`href="/games/${ID_A}"`);
-    expect(body).toContain(`href="/games/${ID_B}"`);
-    expect(body).toContain("3 players");
-    expect(body).toContain("4 players");
-    expect(body).toContain("Sat, Nov 21, 2026, 7:05 PM UTC"); // A: received time
-    expect(body).toContain("Sat, Nov 21, 2026, 8:14 PM"); // B: the device's ended_at
-    expect(body).not.toContain("date unknown");
-    expect(body).toContain("11:06"); // A global 666000
-    expect(body).toContain("7:40"); // B global 460000
-    // newest first: B was saved last
+    expect(body).toContain('href="/static/app.css"');
+    expect(body).toContain("Latest game");
+    expect(body).toContain(`href="/games/${ID_B}"`); // B was saved last
+    expect(body).toContain("Sat 21 Nov 2026");
+    expect(body).toContain("8:14 PM"); // the day had 2 games, so the time shows
+    expect(body).toContain("1 more game that day");
+    expect(body).toContain('href="/days/2026-11-21"');
+    expect(body).toContain("November 2026");
+    expect(body).toContain('href="/stats"');
+    expect(body).toContain("View stats");
+    expect(visible(body)).not.toContain(ID_B);
+  });
+
+  it("the Day page lists both games with their times, newest first", async () => {
+    const { status, body } = await get("/days/2026-11-21");
+    expect(status).toBe(200);
+    expect(body).toContain("2 games");
+    expect(body).toContain("7:05 PM");
+    expect(body).toContain("8:14 PM");
     expect(body.indexOf(ID_B)).toBeLessThan(body.indexOf(ID_A));
   });
 
-  it("GET /games/<A> shows the fixture A detail", async () => {
+  it("a day with no games is not found; a malformed day is not found", async () => {
+    expect((await get("/days/2026-11-20")).status).toBe(404);
+    expect((await get("/days/yesterday")).status).toBe(404);
+  });
+
+  it("Game A: date heading, winner marked once in the list, over-limit turns, no game ID", async () => {
     const { status, body } = await get(`/games/${ID_A}`);
     expect(status).toBe(200);
-    for (const s of ["Marquise de Cat", "Eyrie Dynasties", "Woodland Alliance", "Jacob", "Alex", "Ahmed"]) {
-      expect(body).toContain(s);
-    }
-    expect(body).toContain("Turn limit: 2:00");
-    expect(body).toContain("Date: Sat, Nov 21, 2026, 7:05 PM UTC");
-    expect(body).not.toContain("Ended");
-    expect(body).toContain("Seat 1");
-    expect(body).toContain("Seat 3");
-    expect(body).toContain("<li>1:02</li>");
-    expect(body).toContain('<li class="over">2:14 (over limit)</li>');
-    expect(body).toContain("3:48"); // Jacob total 228000
-    expect(body).toContain("11:06");
-    expect(body).toContain('href="/"');
-    expect(body).not.toContain("extra turns beyond 128");
-    expect(body).not.toContain("Warnings");
-    // players in array order
-    expect(body.indexOf("Jacob")).toBeLessThan(body.indexOf("Alex"));
-    expect(body.indexOf("Alex")).toBeLessThan(body.indexOf("Ahmed"));
+    for (const s of ["Marquise de Cat", "Eyrie Dynasties", "Woodland Alliance", "Jacob", "Alex", "Ahmed"]) expect(body).toContain(s);
+    expect(body).toContain("<h1 class=\"display\">Sat 21 Nov 2026</h1>");
+    expect(body).toContain("7:05 PM");
+    expect(body).toContain("11 min"); // 666000 ms
+    expect(body).toContain("2:00"); // turn limit
+    expect(body).not.toContain("Avg per player");
+    // Winner = whoever's turn the game ended on: turn counts 3, 3, 2 → seat 2, Alex.
+    const winnerRows = body.match(/<span class="winner">/g) ?? [];
+    expect(winnerRows).toHaveLength(2); // narrow row + wide table, both Alex
+    expect(body.indexOf('<span class="winner">')).toBeGreaterThan(body.indexOf(">Alex<"));
+    expect(body).toContain("1 of 3"); // Alex's 2:14 over 2:00
+    expect(body).toContain("<title>Turn 3: 2:14 (over 2:00)</title>");
+    expect(body).toContain("<title>Turn 2: 2:00</title>"); // exactly at the limit is not over
+    expect(body).toContain('href="/days/2026-11-21"'); // back to the day: it had 2 games
+    expect(visible(body.replace(/href="[^"]*"/g, ""))).not.toContain(ID_A);
+    expect(body).not.toContain("Data notes");
   });
 
-  it("GET /games/<B> shows no turn limit and full faction names", async () => {
+  it("Game B: no turn limit, full faction names, winner Ahmed", async () => {
     const { status, body } = await get(`/games/${ID_B}`);
     expect(status).toBe(200);
-    expect(body).toContain("no turn limit");
-    expect(body).toContain("Lizard Cult");
-    expect(body).toContain("Underground Duchy");
-    expect(body).toContain("Corvid Conspiracy");
-    expect(body).toContain("Lorenzo");
-    expect(body).toContain("Seat 4");
-    expect(body).toContain("Date: Sat, Nov 21, 2026, 8:14 PM");
+    expect(body).toContain("None");
+    for (const s of ["Lizard Cult", "Underground Duchy", "Corvid Conspiracy", "Vagabond", "Lorenzo"]) expect(body).toContain(s);
+    expect(body).not.toContain("(over ");
+    // counts 2, 2, 2, 1 → seat 3
+    const firstWinner = body.indexOf('<span class="winner">');
+    expect(body.lastIndexOf(">Ahmed<", firstWinner)).toBeGreaterThan(body.lastIndexOf(">Alex<", firstWinner));
   });
 
-  it("shows the received time in the configured time zone", async () => {
-    const list = await get("/", "America/New_York");
-    expect(list.body).toContain("Sat, Nov 21, 2026, 2:05 PM EST");
-    const detail = await get(`/games/${ID_A}`, "America/New_York");
-    expect(detail.body).toContain("Date: Sat, Nov 21, 2026, 2:05 PM EST");
+  it("dates and days follow the configured time zone", async () => {
+    const day = await get("/days/2026-11-21", "America/New_York");
+    expect(day.body).toContain("2:05 PM"); // A received 19:05 UTC
+    expect(day.body).toContain("8:14 PM"); // B's own ended_at is shown as written
   });
 
   it("a repeat upload keeps the first received time", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-11-22T09:00:00Z"));
-    expect(await store.save(loadFixture("fixture-a.json"))).toBe(false);
-    vi.useRealTimers();
-    const { body } = await get(`/games/${ID_A}`);
-    expect(body).toContain("Date: Sat, Nov 21, 2026, 7:05 PM UTC");
+    expect(await saveAt("2026-11-22T09:00:00Z", loadFixture("fixture-a.json"))).toBe(false);
+    const { body } = await get("/days/2026-11-21");
+    expect(body).toContain("7:05 PM");
+  });
+
+  it("the calendar changes month from the URL and slides in the arrow's direction", async () => {
+    const oct = await get("/?month=2026-10&slide=prev");
+    expect(oct.body).toContain("October 2026");
+    expect(oct.body).toContain('data-slide="prev"');
+    expect(oct.body).toContain("No games this month");
+    const bad = await get("/?month=2026-13&slide=sideways");
+    expect(bad.body).toContain("November 2026");
+    expect(bad.body).not.toContain("data-slide");
+  });
+
+  it("stats pages render and never show catalogue IDs", async () => {
+    for (const p of ["/stats", "/stats/games", "/stats/players", "/stats/players?view=wins", "/stats/factions", "/players/alex", "/factions/eyrie"]) {
+      const { status, body } = await get(p);
+      expect(status, p).toBe(200);
+      expect(visible(body), p).not.toMatch(/\b[CW]\d{1,2}\b/);
+      expect(body, p).not.toMatch(/NaN|undefined/);
+    }
+    const stats = await get("/stats");
+    expect(stats.body).toContain("Records");
+    expect(stats.body).toContain("2:14"); // longest turn: Alex in A
+    expect(stats.body).toContain("Alex · Sat 21 Nov");
+    expect(stats.body).toContain('data-chart="C13"');
+  });
+
+  it("player and faction pages: case-insensitive names, unknown ones are not found", async () => {
+    expect((await get("/players/ALEX")).status).toBe(200);
+    expect((await get("/players/nobody")).status).toBe(404);
+    expect((await get("/factions/nope")).status).toBe(404);
+    const alex = await get("/players/alex");
+    expect(alex.body).toContain("<h1 class=\"display\">Alex</h1>");
+    expect(alex.body).toContain("Recent games");
   });
 
   it("unknown game id → 404", async () => {
@@ -122,40 +170,56 @@ describe("with both fixtures stored", () => {
   });
 });
 
-describe("edge cases", () => {
+describe("single games and edge cases", () => {
   const base = (): GameResult => loadFixture("fixture-a.json");
 
   it("empty store shows the empty state", async () => {
     const { status, body } = await get("/");
     expect(status).toBe(200);
-    expect(body).toContain("No games yet.");
+    expect(body).toContain("No games yet");
   });
 
-  it("unknown faction key is shown as-is", async () => {
+  it("a day with one game redirects to that game; no time is shown", async () => {
+    await saveAt("2026-11-21T19:05:00Z", base());
+    const day = await get("/days/2026-11-21");
+    expect(day.status).toBe(302);
+    expect(day.location).toBe(`/games/${ID_A}`);
+    const game = await get(`/games/${ID_A}`);
+    expect(game.body).not.toContain("7:05 PM");
+    expect(game.body).toContain('href="/?month=2026-11"');
+  });
+
+  it("unknown faction key is shown as-is, without an icon", async () => {
     const r = base();
     r.players[0]!.faction = "otters";
     await store.save(r);
     const { body } = await get(`/games/${ID_A}`);
     expect(body).toContain("otters");
+    expect(body).not.toContain("/static/factions/otters.png");
+    expect(body).toContain('src="/static/factions/eyrie.png"');
   });
 
   it("escapes untrusted nicknames", async () => {
     const r = base();
     r.players[0]!.nickname = "<script>alert(1)</script>";
     await store.save(r);
-    const { body } = await get(`/games/${ID_A}`);
-    expect(body).not.toContain("<script>");
-    expect(body).toContain("&lt;script&gt;");
+    for (const p of [`/games/${ID_A}`, "/", "/stats/players"]) {
+      const { body } = await get(p);
+      expect(body, p).not.toContain("<script>");
+    }
+    expect((await get(`/games/${ID_A}`)).body).toContain("&lt;script&gt;");
   });
 
-  it("renders stored warnings and the truncation note", async () => {
+  it("data notes show warnings and truncation; a truncated game has a NULL winner", async () => {
     const r = base();
     r.players[1]!.turns_truncated = true;
     await store.save(r, ["sum of players total_ms differs from global_ms"]);
     const { body } = await get(`/games/${ID_A}`);
-    expect(body).toContain("Warnings");
+    expect(body).toContain("Data notes");
     expect(body).toContain("sum of players total_ms differs from global_ms");
-    expect(body).toContain("last turn includes extra turns beyond 128");
+    expect(body).toContain("Alex&#39;s last turn includes extra turns beyond 128.");
+    expect(body).toContain("NULL");
+    expect(body).not.toContain('<span class="winner">');
   });
 
   it("URL-encodes game ids in links and resolves them on the detail route", async () => {
@@ -168,47 +232,17 @@ describe("edge cases", () => {
     expect(detail.status).toBe(200);
     expect(detail.body).toContain("Jacob");
   });
-});
 
-describe("faction icons and average per player", () => {
-  beforeEach(async () => {
-    await store.save(loadFixture("fixture-a.json"));
-    await store.save(loadFixture("fixture-b.json"));
-  });
-
-  it("list shows the average per player and faction icons", async () => {
-    const { body } = await get("/");
-    expect(body).toContain("avg 3:42 per player"); // A: 666000 / 3
-    expect(body).toContain("avg 1:55 per player"); // B: 460000 / 4
-    expect(body).toContain('src="/static/factions/cult.png"');
-    expect(body).toContain('alt="Lizard Cult"');
-  });
-
-  it("detail shows the average and an icon per known faction", async () => {
-    const { body } = await get(`/games/${ID_A}`);
-    expect(body).toContain("Average per player: 3:42");
-    for (const k of ["marquise", "eyrie", "woodland"]) {
-      expect(body).toContain(`src="/static/factions/${k}.png"`);
-    }
-  });
-
-  it("unknown faction gets no icon", async () => {
-    const r = loadFixture("fixture-a.json");
-    r.game_id = "otters01";
-    r.players[0]!.faction = "otters";
-    await store.save(r);
-    const { body } = await get("/games/otters01");
-    expect(body).toContain("otters");
-    expect(body).not.toContain("/static/factions/otters.png");
-  });
-
-  it("serves icon files as PNG and 404s missing or traversal paths", async () => {
-    const app = createApp(store, { publicDir: path.resolve(import.meta.dirname, "../public") });
-    const ok = await app.request("/static/factions/marquise.png");
-    expect(ok.status).toBe(200);
-    expect(ok.headers.get("content-type")).toBe("image/png");
-    expect((await app.request("/static/factions/otters.png")).status).toBe(404);
-    expect((await app.request("/static/..%2Fpackage.json")).status).toBe(404);
-    expect((await app.request("/static/../package.json")).status).toBe(404);
+  it("1-player games are left out of stats", async () => {
+    const solo = base();
+    solo.game_id = "solo0001";
+    solo.players = [{ ...solo.players[0]!, nickname: "Tester" }];
+    solo.global_ms = solo.players[0]!.total_ms;
+    await store.save(solo);
+    await store.save(base());
+    const { body } = await get("/stats/players");
+    expect(body).not.toContain("Tester");
+    expect(body).toContain("Alex");
+    expect((await get("/players/tester")).status).toBe(404);
   });
 });

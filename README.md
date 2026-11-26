@@ -9,7 +9,8 @@ The full brief and data contract (v1) are in [`specs.md`](specs.md).
 | Concern | Choice |
 |---|---|
 | Language | TypeScript (Node 22 LTS) |
-| Server + pages | Hono, server-rendered JSX |
+| Server + pages | Hono, server-rendered JSX and SVG; no client JavaScript |
+| Styles | One stylesheet, `public/app.css`, with design tokens from Figma (light and dark); fonts Libron and IBM Plex Mono, self-hosted in `public/fonts/` (OFL) |
 | Storage | SQLite (`better-sqlite3`), one file: `data/rootclock.db`; or Supabase Postgres when hosted (see [Hosting on Vercel + Supabase](#hosting-on-vercel--supabase)) |
 | Validation | zod |
 | Tests | Vitest |
@@ -27,9 +28,9 @@ It runs two ways, with the same pages and API:
 - **Web app on a host instead of a mobile app.** The app runs in Docker on one computer so its data lives in one place and is easy to back up.
 - **Hosted or local server.** There are no user accounts. The pages are public to anyone with the URL; writing needs the device's shared token (`INGEST_TOKEN`). Results live in Supabase when hosted, or in the SQLite file locally.
 - **Faction icons.** The brief says "no faction artwork"; this project shows the bundled icons from `public/factions/` (see below).
-- **One extra metric: average time per player**, the game's `global_ms` divided by the number of players. It is shown on both pages. No other statistics.
-- **Games are dated by when the server received them.** The board sends `ended_at: null` (its clock isn't set), so both pages show the time the game first reached the server, labelled "Date", in `DISPLAY_TIME_ZONE`. A retried upload keeps the first time. If the board ever sends an `ended_at`, that is shown instead, as written. The board can hold a game while offline, so the date can be later than when the game actually ended.
-- **Over-limit turns are marked** on the detail page when `turn_limit_ms` is set (bold, "(over limit)", plus a per-player count). A truncated player's last turn is never marked, because it combines several real turns.
+- **Statistics and a winner.** The brief allows no statistics; this project adds the curated set decided in GitHub #18 and #25 (records, game length, seats, pace, per-player and per-faction speed, win stats). The **winner is the player whose turn the game ended on**, worked out from the turn counts (play goes in seat order from seat 1). If any player passed 128 turns the counts are capped and the winner shows as NULL. Win stats only count games with a known winner. 1-player games are left out of all statistics.
+- **Games are dated by when the server received them.** The board sends `ended_at: null` (its clock isn't set), so a game is dated by when it first reached the server, in `DISPLAY_TIME_ZONE`, and belongs to that calendar day. A retried upload keeps the first time. If the board ever sends an `ended_at`, that is used instead, as written. The time of day is shown only on days with two or more games. The board can hold a game while offline, so the date can be later than when the game actually ended.
+- **Over-limit turns are marked** when `turn_limit_ms` is set: solid bars are over the limit, outlined bars are within it, with a per-player count. A truncated player's last turn is drawn dashed and never counted, because it combines several real turns.
 
 - **HTTP ingest.** The device posts each result to `POST /api/results` ([Device API](#device-api)). The bundled fixtures still go through `FixtureResultSource`, and only into a local database.
 
@@ -39,18 +40,29 @@ Everything else in the brief applies unchanged: contract v1, parser rules and th
 
 `public/factions/<key>.png` holds one icon per faction, named by the faction key from the contract (`marquise.png`, `eyrie.png`, … all 13 keys in `specs.md`). The app serves them at `/static/factions/<key>.png` and shows them:
 
-- on the game list, as a small row of icons per game (alt text and tooltip = faction name);
-- on the game detail page, next to each player's faction name.
+- on every game card, next to each player;
+- on the game page, in the player rows;
+- on the Factions and Faction stats pages.
 
 Unknown faction keys get no icon, just the raw key as text. To add or replace an icon, drop a PNG named after the key into `public/factions/`, then rebuild (`docker compose up -d --build`). A test (`test/factions.test.ts`) fails if a known faction key has no icon file.
 
-## MVP scope
+## Pages
 
-Import game results from bundled JSON fixtures, validate them against contract v1, store them in SQLite, and show them on two pages (game list and game detail).
+The design lives in Figma (Screens page); decisions are tracked in GitHub #23 and its linked issues.
 
-Out of scope for now: live updates, stats/charts, and v2 fields. The HTTP ingest endpoint for the board's Wi-Fi upload exists (see below).
+| Path | Page |
+|---|---|
+| `/` | Latest game, a calendar of one month (`?month=YYYY-MM`), View stats. Months slide in the arrow's direction (cross-document View Transitions). |
+| `/days/YYYY-MM-DD` | A day with 2+ games; a day with one game redirects to it |
+| `/games/<game_id>` | Who used the time, players with turn-by-turn bars (expandable on phones, a table on wide screens), pace. The game ID is never shown. |
+| `/stats` | Records, then Games, Players and Factions |
+| `/stats/games`, `/stats/players`, `/players/<name>`, `/stats/factions`, `/factions/<key>` | The stats sections |
 
-Work is tracked in GitHub Issues under the **MVP** milestone.
+Raw rows of numbers are not shown in the app; browse them in the Supabase dashboard. Catalogue IDs (C1…C15, W1…W9) stay out of the visible page and appear only in `data-chart` attributes, matching the Figma layer names.
+
+Out of scope for now: live updates and v2 fields. The HTTP ingest endpoint for the board's Wi-Fi upload exists (see below).
+
+Work is tracked in GitHub Issues: the **MVP** milestone, and the redesign under the `frontend` label.
 
 ## Device API
 
