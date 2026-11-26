@@ -190,6 +190,18 @@ describe("with both fixtures stored", () => {
 describe("single games and edge cases", () => {
   const base = (): GameResult => loadFixture("fixture-a.json");
 
+  it("serves the Marquise favicon and links it from every page", async () => {
+    const { body } = await get("/");
+    expect(body).toContain('<link rel="icon" href="/static/favicon.ico" sizes="32x32"/>');
+    expect(body).toContain('<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png"/>');
+    const ico = await createApp(store, { publicDir: path.resolve(import.meta.dirname, "../public") }).request("/static/favicon.ico");
+    expect(ico.status).toBe(200);
+    expect(Buffer.from(await ico.arrayBuffer()).subarray(0, 4)).toEqual(Buffer.from([0, 0, 1, 0]));
+    const root = await get("/favicon.ico");
+    expect(root.status).toBe(301);
+    expect(root.location).toBe("/static/favicon.ico");
+  });
+
   it("empty store shows the empty state", async () => {
     const { status, body } = await get("/");
     expect(status).toBe(200);
