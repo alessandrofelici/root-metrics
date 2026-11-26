@@ -14,7 +14,6 @@ import {
   DayPage, FactionPage, FactionsPage, GamePage, GamesStatsPage, HomePage, NotFoundPage, PlayerPage, PlayersPage, StatsPage,
 } from "./views/pages.js";
 import { CalendarMonth, gameHref, page } from "./views/ui.js";
-import { VisualSwitchesPage } from "./views/demo.js";
 
 export interface AppOptions {
   publicDir?: string;
@@ -110,12 +109,6 @@ export function createApp(store: ResultStore, opts: AppOptions = {}): Hono {
     if (!f) return notFound(c);
     return show(c, factionName(f.key), <FactionPage f={f} />);
   });
-
-  // DEMO: proposed chart switches next to today's components (docs/visual-switches.md). Linked
-  // from nowhere; remove before merging if the switches are adopted.
-  app.get("/demo/visuals", async (c) =>
-    c.html(page("Visual switches (demo) · Root Metrics", <VisualSwitchesPage snap={await snapshot()} />, { styles: ["/static/demo.css"] })),
-  );
 
   app.notFound((c) => notFound(c));
   return app;

@@ -6,12 +6,20 @@
 // Catalogue IDs (C1…W9) go in data-chart attributes only; they are never shown.
 import type { Child } from "hono/jsx";
 import { html } from "hono/html";
-import { factionIconUrl, factionName } from "../factions.js";
-import { addMonths, dayLabel, formatAvgTurn, formatTotal, formatTurn, monthLabel, timeLabel } from "../format.js";
+import { FACTIONS, factionIconUrl, factionName } from "../factions.js";
+import { addMonths, dayLabel, formatAvgTurn, formatPercent, formatTotal, formatTurn, monthLabel, timeLabel } from "../format.js";
 import type { GameFacts, PlayerFacts, Snapshot } from "../derive.js";
-import { mean } from "../stats.js";
+import { mean, type Spread } from "../stats.js";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** CSS class that sets --faction to the faction's colour (unknown keys get a neutral grey). The
+ *  key is only used when it is in the faction table, so stored strings never reach a class name. */
+export function factionTone(key: string): string {
+  return Object.hasOwn(FACTIONS, key) ? `faction-${key}` : "faction-unknown";
+}
 
 export function gameHref(id: string): string {
   return `/games/${encodeURIComponent(id)}`;
@@ -36,7 +44,7 @@ export const HomeIcon = () => <Svg size={18}><path d="M3 10.5 12 3l9 7.5" /><pat
 const CrownIcon = () => <Svg size={13}><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z" /></Svg>;
 
 // ---------- Page shell ----------
-export function page(title: string, body: Child, opts: { slide?: "prev" | "next"; styles?: string[] } = {}) {
+export function page(title: string, body: Child, opts: { slide?: "prev" | "next" } = {}) {
   return html`<!doctype html>${(
     <html lang="en" data-slide={opts.slide}>
       <head>
@@ -47,9 +55,6 @@ export function page(title: string, body: Child, opts: { slide?: "prev" | "next"
         <link rel="icon" href="/static/favicon.ico" sizes="32x32" />
         <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
         <link rel="stylesheet" href="/static/app.css" />
-        {(opts.styles ?? []).map((href) => (
-          <link rel="stylesheet" href={href} />
-        ))}
         <script src="/static/app.js" defer></script>
       </head>
       <body>
@@ -153,7 +158,10 @@ export function Disclosure({ title, summary, chart, open, children }: { title: s
 }
 
 // ---------- Game card ----------
+/** Each player row carries a dot in their faction's colour and their share of the game time,
+ *  which stand in for a legend for the thin share bar under the players. */
 export function GameCard({ g, showTime }: { g: GameFacts; showTime: boolean }) {
+  const sum = g.players.reduce((n, p) => n + p.totalMs, 0) || 1;
   return (
     <a class="card game-card" href={gameHref(g.id)}>
       <span class="game-card-date">
@@ -167,9 +175,18 @@ export function GameCard({ g, showTime }: { g: GameFacts; showTime: boolean }) {
             <FactionIcon faction={p.faction} />
             <span>{p.nickname}</span>
             {p.won ? <WinnerMarker /> : null}
+            <span class="chip-share">
+              <span class={`dot ${factionTone(p.faction)}`} />
+              <span class="num">{formatPercent(p.totalMs / sum)}</span>
+            </span>
           </li>
         ))}
       </ul>
+      <span class="thin-share" role="img" aria-label={`Share of game time: ${g.players.map((p) => `${p.nickname} ${formatPercent(p.totalMs / sum)}`).join(", ")}`}>
+        {g.players.map((p) => (
+          <span class={`seg ${factionTone(p.faction)}`} style={`flex-grow:${p.totalMs}`} />
+        ))}
+      </span>
       <span class="card-foot">
         <span class="label">Game time</span>
         <span class="num">{formatTotal(g.globalMs)}</span>
@@ -241,7 +258,11 @@ export function CalendarMonth({ month, snap, today }: { month: string; snap: Sna
 
 // ---------- Charts ----------
 /** Turn-by-turn bars. Over the limit: solid. Within: outlined. A truncated player's last turn
- *  (several turns summed) is dashed and never counted as over. */
+ *  (several turns summed) is dashed and never counted as over. The limit line is drawn only for a
+ *  player with a turn over it; otherwise it would only squash the bars. The plot is at least
+ *  MIN_TURN_SLOTS turns wide, so a short game doesn't stretch each bar across the chart. */
+const MIN_TURN_SLOTS = 6;
+
 export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs: number | null; mini?: boolean }) {
   const W = mini ? 280 : 320;
   const H = mini ? 36 : 128;
@@ -249,9 +270,10 @@ export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs
   const top = mini ? 2 : 8;
   const bottom = mini ? 0 : 18;
   const turns = p.turnsMs;
-  const yMax = Math.ceil(Math.max(...turns, limitMs ?? 0, 60_000) / 60_000) * 60_000;
+  const lineMs = limitMs !== null && p.overLimit > 0 ? limitMs : null;
+  const yMax = Math.ceil(Math.max(...turns, lineMs ?? 0, 60_000) / 60_000) * 60_000;
   const plotH = H - top - bottom;
-  const step = (W - left) / Math.max(1, turns.length);
+  const step = (W - left) / Math.max(MIN_TURN_SLOTS, turns.length);
   const bw = Math.max(1, step * 0.72);
   const y = (ms: number) => top + plotH - (ms / yMax) * plotH;
   const labelEvery = turns.length <= 16 ? 1 : Math.ceil(turns.length / 8);
@@ -274,10 +296,10 @@ export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs
           </rect>
         );
       })}
-      {limitMs !== null ? (
+      {lineMs !== null ? (
         <>
-          <line class="limit" x1={left} x2={W} y1={r2(y(limitMs))} y2={r2(y(limitMs))} />
-          {mini ? null : <text class="axis limit-label" x="0" y={r2(y(limitMs) + 4)}>{formatTurn(limitMs)}</text>}
+          <line class="limit" x1={left} x2={W} y1={r2(y(lineMs))} y2={r2(y(lineMs))} />
+          {mini ? null : <text class="axis limit-label" x="0" y={r2(y(lineMs) + 4)}>{formatTurn(lineMs)}</text>}
         </>
       ) : null}
       {mini ? null : turns.map((_, i) => (i % labelEvery === 0 || i === turns.length - 1 ? <text class="axis" x={r2(left + i * step + step / 2)} y={H - 4} text-anchor="middle">{String(i + 1)}</text> : null))}
@@ -285,29 +307,45 @@ export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs
   );
 }
 
-/** Who used the time (C6): one stacked bar in seat order, in the four seat colours. */
+/** Who used the time (C6): a donut in seat order from 12 o'clock, each player in their faction's
+ *  colour, game time in the middle. The legend carries every name, share and time, so identity
+ *  never rests on colour alone. */
 export function TimeShare({ g }: { g: GameFacts }) {
   const sum = g.players.reduce((n, p) => n + p.totalMs, 0) || 1;
   const top = [...g.players].sort((a, b) => b.totalMs - a.totalMs)[0]!;
+  const size = 156, sw = 22, r = (size - sw) / 2, c = 2 * Math.PI * r, mid = size / 2;
+  const gap = g.players.length > 1 ? 2 : 0;
+  let start = 0;
+  const segs = g.players.map((p) => {
+    const frac = p.totalMs / sum;
+    const seg = { p, frac, len: Math.max(0.5, frac * c - gap), offset: -(start * c + gap / 2) };
+    start += frac;
+    return seg;
+  });
   return (
     <section class="share" data-chart="C6">
-      <Takeaway chart="C6">{`${top.nickname} used the most time: ${Math.round((top.totalMs / sum) * 100)}% of the game.`}</Takeaway>
-      <div class="share-bar" role="img" aria-label={g.players.map((p) => `${p.nickname} ${Math.round((p.totalMs / sum) * 100)}%`).join(", ")}>
-        {g.players.map((p) => (
-          <span class={`seg seat-${p.seat}`} style={`flex-grow:${p.totalMs}`} />
-        ))}
+      <Takeaway chart="C6">{`${top.nickname} used the most time: ${formatPercent(top.totalMs / sum)} of the game.`}</Takeaway>
+      <div class="donut-wrap">
+        <svg class="donut" viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={g.players.map((p) => `${p.nickname} ${formatPercent(p.totalMs / sum)}`).join(", ")}>
+          {segs.map((s) => (
+            <circle class={`donut-seg ${factionTone(s.p.faction)}`} cx={mid} cy={mid} r={r2(r)} stroke-width={sw} stroke-dasharray={`${r2(s.len)} ${r2(c - s.len)}`} stroke-dashoffset={r2(s.offset)} transform={`rotate(-90 ${mid} ${mid})`}>
+              <title>{`${s.p.nickname}: ${formatPercent(s.frac)} · ${formatTotal(s.p.totalMs)}`}</title>
+            </circle>
+          ))}
+          <text class="donut-label" x={mid} y={mid - 9} text-anchor="middle">GAME TIME</text>
+          <text class="donut-value" x={mid} y={mid + 9} text-anchor="middle">{formatTotal(g.globalMs)}</text>
+        </svg>
+        <ul class="donut-legend">
+          {g.players.map((p) => (
+            <li>
+              <span class={`dot ${factionTone(p.faction)}`} />
+              <span class="donut-name">{p.nickname}</span>
+              <span class="num">{formatPercent(p.totalMs / sum)}</span>
+              <span class="donut-time small muted">{formatTotal(p.totalMs)}</span>
+            </li>
+          ))}
+        </ul>
       </div>
-      <ul class="share-labels">
-        {g.players.map((p) => (
-          <li style={`flex-grow:${Math.max(p.totalMs, sum * 0.12)}`}>
-            <span class="share-name">
-              <span class={`dot seat-${p.seat}`} />
-              {p.nickname}
-            </span>
-            <span class="label">{formatTotal(p.totalMs)}</span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
@@ -329,6 +367,178 @@ export function BarList({ items, chart }: { items: BarItem[]; chart?: string }) 
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A percentage as a ring: the arc is the share, the number sits inside. The track is a lighter
+ *  step of the fill's colour. tone="over" uses the over-the-limit colours of the turn bars. */
+export function Ring({ fraction, label, size = 64, tone = "accent" }: { fraction: number | null; label: string; size?: number; tone?: "accent" | "over" }) {
+  const sw = Math.max(3, Math.round(size * 0.11));
+  const r = (size - sw) / 2;
+  const c = 2 * Math.PI * r;
+  const mid = size / 2;
+  const f = fraction === null ? 0 : clamp01(fraction);
+  const text = fraction === null ? "–" : formatPercent(f);
+  return (
+    <svg class={`ring tone-${tone}`} viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={`${label}: ${text}`}>
+      <title>{`${label}: ${text}`}</title>
+      <circle class="ring-track" cx={mid} cy={mid} r={r2(r)} stroke-width={sw} />
+      {f >= 0.9995 ? (
+        <circle class="ring-fill" cx={mid} cy={mid} r={r2(r)} stroke-width={sw} />
+      ) : f > 0 ? (
+        <circle class="ring-fill" cx={mid} cy={mid} r={r2(r)} stroke-width={sw} stroke-dasharray={`${r2(f * c)} ${r2(c)}`} transform={`rotate(-90 ${mid} ${mid})`} />
+      ) : null}
+      <text class="ring-text" x={mid} y={mid} text-anchor="middle" dominant-baseline="central" font-size={r2(size * 0.25)}>{text}</text>
+    </svg>
+  );
+}
+
+/** "2 of 5" as pips (one per game, filled = won). Past 12 the pips get too small, so it becomes
+ *  a meter bar. The text stays beside it. */
+export function Tally({ hits, total, label }: { hits: number; total: number; label: string }) {
+  const text = `${hits} of ${total}`;
+  return (
+    <span class="tally" role="img" aria-label={`${label}: ${text}`}>
+      {total <= 12 ? (
+        <span class="pips" aria-hidden="true">
+          {Array.from({ length: total }, (_, i) => <span class={i < hits ? "pip on" : "pip"} />)}
+        </span>
+      ) : (
+        <span class="tally-meter" aria-hidden="true">
+          <span class="tally-meter-fill" style={`width:${r2(clamp01(total ? hits / total : 0) * 100)}%`} />
+        </span>
+      )}
+      <span class="num tally-text" aria-hidden="true">{text}</span>
+    </span>
+  );
+}
+
+export interface PartItem { label: Child; part: number; whole: number; highlight?: boolean }
+
+/** Wins inside games played: the light bar is the whole (one shared scale), the dark part is the
+ *  part. Shows both how often and how well. */
+export function PartBarList({ items, chart }: { items: PartItem[]; chart?: string }) {
+  const max = Math.max(1, ...items.map((i) => i.whole));
+  return (
+    <ul class="bar-list part-bars" data-chart={chart}>
+      {items.map((i) => (
+        <li class={i.highlight ? "highlight" : undefined}>
+          <span class="bar-label">{i.label}</span>
+          <span class="part-slot">
+            <span class="part-track" style={`width:${r2((i.whole / max) * 100)}%`}>
+              <span class="part-fill" style={`width:${i.whole ? r2((i.part / i.whole) * 100) : 0}%`} />
+            </span>
+          </span>
+          <span class="num bar-value">{`${i.part} of ${i.whole}`}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export interface HeatRow { key: string; label: string; cells: (number | null)[] }
+
+/** A grid of numbers with each cell shaded by its value (one hue, darker = more). The number
+ *  stays in the cell; empty cells show a dot. */
+export function HeatMatrix({ columns, rows, show, lo, hi }: {
+  columns: { key: string; head: Child; title: string }[]; rows: HeatRow[]; show: (v: number) => string; lo: string; hi: string;
+}) {
+  const vals = rows.flatMap((r) => r.cells).filter((v): v is number => v !== null);
+  const max = Math.max(1, ...vals);
+  return (
+    <>
+      <div class="table-scroll">
+        <table class="data-table matrix heat-matrix">
+          <thead>
+            <tr>
+              <th scope="col">Player</th>
+              {columns.map((c) => (
+                <th scope="col" title={c.title}>{c.head}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr>
+                <th scope="row">{r.label}</th>
+                {r.cells.map((v, i) => {
+                  if (v === null) return <td class="num muted">·</td>;
+                  const heat = Math.round(12 + 68 * (v / max));
+                  return <td class={heat > 50 ? "num heat strong" : "num heat"} style={`--heat:${heat}%`} title={`${r.label} · ${columns[i]!.title}: ${show(v)}`}>{show(v)}</td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="keys small muted">
+        <span class="key heat-key-lo" /> {lo} <span class="key heat-key-hi" /> {hi}
+      </p>
+    </>
+  );
+}
+
+export interface RangeRow { key: string; label: string; spread: Spread; highlight?: boolean }
+
+/** Turn length spread per player on one shared axis (C2, C4): whisker fastest–slowest, box the
+ *  middle half, tick the median. The highlighted player is in the accent, the rest grey. */
+export function TurnRanges({ rows, chart = "C2 C4" }: { rows: RangeRow[]; chart?: string }) {
+  if (rows.length === 0) return <p class="small muted">No turns yet.</p>;
+  const hiMs = Math.max(...rows.map((r) => r.spread.max));
+  const stepMs = hiMs > 6 * 60_000 ? 120_000 : 60_000;
+  const axisMax = Math.max(stepMs, Math.ceil(hiMs / stepMs) * stepMs);
+  const x = (ms: number) => `${r2((ms / axisMax) * 100)}%`;
+  const ticks = Array.from({ length: axisMax / stepMs + 1 }, (_, i) => i * stepMs);
+  return (
+    <ul class="ranges" data-chart={chart}>
+      {rows.map(({ label, spread: s, highlight }) => {
+        const text = `middle half ${formatTurn(s.q1)} to ${formatTurn(s.q3)}, median ${formatTurn(s.median)}, fastest ${formatTurn(s.min)}, slowest ${formatTurn(s.max)}`;
+        return (
+          <li class={highlight ? "highlight" : undefined}>
+            <span class="bar-label">{label}</span>
+            <span class="range-track" role="img" aria-label={`${label}: ${text}`} title={text}>
+              <span class="range-whisker" style={`left:${x(s.min)};width:${x(s.max - s.min)}`} />
+              <span class="range-box" style={`left:${x(s.q1)};width:${x(Math.max(s.q3 - s.q1, axisMax * 0.006))}`} />
+              <span class="range-median" style={`left:${x(s.median)}`} />
+            </span>
+          </li>
+        );
+      })}
+      <li class="range-axis-row" aria-hidden="true">
+        <span />
+        <span class="range-axis">
+          {ticks.map((t) => (
+            <span style={`left:${x(t)}`}>{t === 0 ? "0" : formatTurn(t)}</span>
+          ))}
+        </span>
+      </li>
+    </ul>
+  );
+}
+
+/** Head to head (W7): my wins grow left from the middle, theirs grow right, on one shared scale. */
+export function HeadToHead({ me, rows }: { me: string; rows: { key: string; name: string; together: number; myWins: number; theirWins: number }[] }) {
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.myWins, r.theirWins)));
+  return (
+    <>
+      <ul class="h2h" data-chart="W7">
+        {rows.map((r) => (
+          <li>
+            <a class="bar-label" href={playerHref(r.key)}>{r.name}</a>
+            <span class="num h2h-n">{String(r.myWins)}</span>
+            <span class="h2h-bars" role="img" aria-label={`${me} ${r.myWins}, ${r.name} ${r.theirWins}, in ${plural(r.together, "game")} together`}>
+              <span class="h2h-side me"><span class="h2h-fill" style={`width:${r2((r.myWins / max) * 100)}%`} /></span>
+              <span class="h2h-side them"><span class="h2h-fill" style={`width:${r2((r.theirWins / max) * 100)}%`} /></span>
+            </span>
+            <span class="num h2h-n">{String(r.theirWins)}</span>
+            <span class="small muted h2h-games">{plural(r.together, "game")}</span>
+          </li>
+        ))}
+      </ul>
+      <p class="keys small muted">
+        <span class="key key-fill" /> {`${me} won`} <span class="key key-them" /> they won
+      </p>
+    </>
   );
 }
 
@@ -452,7 +662,7 @@ export function PlayersTable({ g }: { g: GameFacts }) {
           <tr>
             <th scope="row">
               <span class="player-cell">
-                <span class={`dot seat-${p.seat}`} />
+                <span class={`dot ${factionTone(p.faction)}`} />
                 <FactionIcon faction={p.faction} />
                 <a class="player-name" href={playerHref(p.key)}>{p.nickname}</a>
                 {p.won ? <WinnerMarker /> : null}

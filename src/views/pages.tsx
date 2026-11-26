@@ -4,12 +4,13 @@ import { factionName } from "../factions.js";
 import { dayLabel, formatAvgTurn, formatPercent, formatTotal, formatTurn, shortDayLabel, shortMonthLabel, timeLabel } from "../format.js";
 import { sharesDay, type GameFacts, type Snapshot } from "../derive.js";
 import {
-  factionStats, lengthBuckets, mean, paceByRound, playerFactions, playerStats, quantile, records, rivals, seatStats,
-  statGames, streak, totals, trend, winRate, winsByMonth, type FactionStats, type PlayerStats, type Trend,
+  factionStats, lengthBuckets, mean, paceByRound, playerFactions, playerStats, records, rivals, seatStats,
+  statGames, streak, totals, trend, turnSpread, winRate, winsByMonth, type FactionStats, type PlayerStats, type Trend,
 } from "../stats.js";
 import {
-  BackLink, BarList, CalendarMonth, Disclosure, Divider, FactionIcon, GameCard, LinkRow, PaceLine, PlayerRow,
-  PlayersTable, Scatter, StatTile, Takeaway, Tiles, TimeShare, factionHref, gameHref, playerHref,
+  BackLink, BarList, CalendarMonth, Disclosure, Divider, FactionIcon, GameCard, HeadToHead, HeatMatrix, LinkRow, PaceLine,
+  PartBarList, PlayerRow, PlayersTable, Ring, Scatter, StatTile, Takeaway, Tally, Tiles, TimeShare, TurnRanges,
+  factionHref, gameHref, playerHref, type RangeRow,
 } from "./ui.js";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -206,7 +207,7 @@ export function GamesStatsPage({ snap }: { snap: Snapshot }) {
             <thead><tr><th scope="col">Seat</th><th scope="col">Avg turn</th><th scope="col">Wins</th></tr></thead>
             <tbody>
               {seats.map((s) => (
-                <tr><th scope="row">{String(s.seat)}</th><td class="num">{formatAvgTurn(s.avgTurnMs)}</td><td class="num">{`${s.wins} of ${s.decided}`}</td></tr>
+                <tr><th scope="row">{String(s.seat)}</th><td class="num">{formatAvgTurn(s.avgTurnMs)}</td><td><Tally hits={s.wins} total={s.decided} label={`Wins from seat ${s.seat}`} /></td></tr>
               ))}
             </tbody>
           </table>
@@ -237,7 +238,7 @@ export function PlayersPage({ snap, view }: { snap: Snapshot; view: MatrixView |
       </div>
       <div class="group">
         {players.map((p) => (
-          <LinkRow href={playerHref(p.key)} title={p.name} summary={`${plural(p.wins, "win")} · ${rateText(p.wins, p.decided)} · avg turn ${formatAvgTurn(p.avgTurnMs)}`} />
+          <LinkRow href={playerHref(p.key)} title={p.name} summary={`${plural(p.wins, "win")} · avg turn ${formatAvgTurn(p.avgTurnMs)}`} icon={<Ring fraction={winRate(p.wins, p.decided)} label={`${p.name} win rate`} size={44} />} />
         ))}
       </div>
       <Divider />
@@ -251,30 +252,21 @@ export function PlayersPage({ snap, view }: { snap: Snapshot; view: MatrixView |
               <a href={`/stats/players?view=${k}`} aria-current={k === v ? "true" : undefined}>{k === "games" ? "Games" : k === "speed" ? "Speed" : "Wins"}</a>
             ))}
           </nav>
-          <div class="table-scroll">
-            <table class="data-table matrix">
-              <thead>
-                <tr>
-                  <th scope="col">Player</th>
-                  {factions.map((f) => (
-                    <th scope="col" title={factionName(f.key)}><FactionIcon faction={f.key} size={22} /></th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {players.map((p) => (
-                  <tr>
-                    <th scope="row">{p.name}</th>
-                    {factions.map((f) => {
-                      const fp = f.players.find((x) => x.key === p.key);
-                      if (!fp) return <td class="num muted">·</td>;
-                      return <td class="num">{v === "games" ? String(fp.games) : v === "wins" ? String(fp.wins) : formatAvgTurn(mean(fp.turnsMs))}</td>;
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <HeatMatrix
+            columns={factions.map((f) => ({ key: f.key, head: <FactionIcon faction={f.key} size={22} />, title: factionName(f.key) }))}
+            rows={players.map((p) => ({
+              key: p.key,
+              label: p.name,
+              cells: factions.map((f) => {
+                const fp = f.players.find((x) => x.key === p.key);
+                if (!fp) return null;
+                return v === "games" ? fp.games : v === "wins" ? fp.wins : mean(fp.turnsMs);
+              }),
+            }))}
+            show={v === "speed" ? formatAvgTurn : String}
+            lo={v === "games" ? "fewer games" : v === "wins" ? "fewer wins" : "faster"}
+            hi={v === "games" ? "more games" : v === "wins" ? "more wins" : "slower"}
+          />
         </Disclosure>
       </div>
     </div>
@@ -293,7 +285,11 @@ export function PlayerPage({ me, all, snap }: { me: PlayerStats; all: PlayerStat
   const last5 = me.results.filter((r) => r.player.won !== null).slice(0, 5);
   const won5 = last5.filter((r) => r.player.won).length;
   const st = streak(me.results);
-  const sorted = [...me.turnsMs].sort((a, b) => a - b);
+  const bySpeed = [...all].sort((a, b) => b.avgTurnMs - a.avgTurnMs);
+  const ranges = bySpeed.flatMap((p): RangeRow[] => {
+    const spread = turnSpread(p.turnsMs);
+    return spread ? [{ key: p.key, label: p.name, spread, highlight: p.key === me.key }] : [];
+  });
   const speedRank = [...all].sort((a, b) => b.avgTurnMs - a.avgTurnMs).findIndex((p) => p.key === me.key);
   const facs = playerFactions(me);
   const best = facs.find((f) => f.wins > 0);
@@ -327,39 +323,34 @@ export function PlayerPage({ me, all, snap }: { me: PlayerStats; all: PlayerStat
       <Divider />
       <div class="group">
         <Disclosure title="Speed" summary={all.length > 1 ? (speedRank === 0 ? `Slowest of the ${all.length}` : speedRank === all.length - 1 ? `Fastest of the ${all.length}` : `Avg turn ${formatAvgTurn(me.avgTurnMs)}`) : `Avg turn ${formatAvgTurn(me.avgTurnMs)}`} chart="C2 C4">
-          <BarList chart="C2" items={[...all].sort((a, b) => b.avgTurnMs - a.avgTurnMs).map((p) => ({ label: p.name, value: p.avgTurnMs, display: formatAvgTurn(p.avgTurnMs), highlight: p.key === me.key }))} />
-          {sorted.length > 0 ? (
-            <p class="small muted" data-chart="C4">{`Middle half of ${me.name}'s turns: ${formatTurn(quantile(sorted, 0.25))} to ${formatTurn(quantile(sorted, 0.75))}. Fastest ${formatTurn(sorted[0]!)}, slowest ${formatTurn(sorted.at(-1)!)}.`}</p>
-          ) : null}
+          <TurnRanges rows={ranges} />
         </Disclosure>
         <Disclosure title="Turn limit" summary={overRate === null ? "No games with a turn limit yet" : `Over the limit on ${formatPercent(overRate)} of turns`} chart="C7">
-          <p class="small">{overRate === null ? "Play with a turn limit to see this." : `${me.overLimit} of ${me.limitedTurns} turns went over the limit, across games that had one.`}</p>
+          {overRate === null ? <p class="small">Play with a turn limit to see this.</p> : (
+            <div class="ring-line">
+              <Ring fraction={overRate} label="Turns over the limit" tone="over" />
+              <p class="small">{`${me.overLimit} of ${me.limitedTurns} turns went over the limit, across games that had one.`}</p>
+            </div>
+          )}
         </Disclosure>
         <Disclosure title="Factions" summary={`Played ${facs.length}${best ? ` · best on ${factionName(best.faction)}` : ""}`} chart="C9 C10 W4">
           <table class="data-table">
-            <thead><tr><th scope="col">Faction</th><th scope="col">Games</th><th scope="col">Wins</th><th scope="col">Avg turn</th></tr></thead>
+            <thead><tr><th scope="col">Faction</th><th scope="col">Wins of games</th><th scope="col">Avg turn</th></tr></thead>
             <tbody>
               {facs.map((f) => (
                 <tr>
                   <th scope="row"><a class="inline-faction" href={factionHref(f.faction)}><FactionIcon faction={f.faction} size={20} />{factionName(f.faction)}</a></th>
-                  <td class="num">{String(f.games)}</td><td class="num">{String(f.wins)}</td><td class="num">{formatAvgTurn(f.avgTurnMs)}</td>
+                  <td><Tally hits={f.wins} total={f.games} label={`Wins on ${factionName(f.faction)}`} /></td><td class="num">{formatAvgTurn(f.avgTurnMs)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </Disclosure>
         <Disclosure title="Rivals" summary={rv[0] ? `${rv[0].myWins > rv[0].theirWins ? "Beats" : rv[0].myWins < rv[0].theirWins ? "Trails" : "Level with"} ${rv[0].name} ${rv[0].myWins} to ${rv[0].theirWins}` : "No shared games yet"} chart="W7">
-          <table class="data-table">
-            <thead><tr><th scope="col">Against</th><th scope="col">Games</th><th scope="col">{`${me.name} won`}</th><th scope="col">They won</th></tr></thead>
-            <tbody>
-              {rv.map((r) => (
-                <tr><th scope="row"><a href={playerHref(r.key)}>{r.name}</a></th><td class="num">{String(r.together)}</td><td class="num">{String(r.myWins)}</td><td class="num">{String(r.theirWins)}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          {rv.length > 0 ? <HeadToHead me={me.name} rows={rv} /> : <p class="small muted">No shared games yet.</p>}
         </Disclosure>
         <Disclosure title="Wins over time" summary={months.length ? `${plural(months.at(-1)!.wins, "win")} in ${shortMonthLabel(months.at(-1)!.month)}` : "No games yet"} chart="W8">
-          <BarList chart="W8" items={months.map((m) => ({ label: shortMonthLabel(m.month), value: m.wins, display: `${m.wins} of ${m.games}` }))} />
+          <PartBarList chart="W8" items={months.map((m) => ({ label: shortMonthLabel(m.month), part: m.wins, whole: m.games }))} />
         </Disclosure>
       </div>
       <Divider />
@@ -442,10 +433,15 @@ export function FactionPage({ f }: { f: FactionStats }) {
           <BarList chart="C10" items={byGames.map((p) => ({ label: p.name, value: mean(p.turnsMs), display: formatAvgTurn(mean(p.turnsMs)) }))} />
         </Disclosure>
         <Disclosure title="Wins by player" summary={f.wins === 0 ? "No wins yet" : byGames.filter((p) => p.wins > 0).map((p) => `${p.name} ${p.wins} of ${p.games}`).join(" · ")} chart="W4">
-          <BarList chart="W4" items={byGames.map((p) => ({ label: p.name, value: p.wins, display: `${p.wins} of ${p.games}` }))} />
+          <PartBarList chart="W4" items={byGames.map((p) => ({ label: p.name, part: p.wins, whole: p.games }))} />
         </Disclosure>
         <Disclosure title="Turn limit" summary={overRate === null ? "No games with a turn limit yet" : `Over the limit on ${formatPercent(overRate)} of turns`} chart="C7">
-          <p class="small">{overRate === null ? "Play with a turn limit to see this." : `${f.overLimit} of ${f.limitedTurns} turns went over the limit.`}</p>
+          {overRate === null ? <p class="small">Play with a turn limit to see this.</p> : (
+            <div class="ring-line">
+              <Ring fraction={overRate} label="Turns over the limit" tone="over" />
+              <p class="small">{`${f.overLimit} of ${f.limitedTurns} turns went over the limit.`}</p>
+            </div>
+          )}
         </Disclosure>
       </div>
     </div>

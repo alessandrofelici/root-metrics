@@ -1,7 +1,7 @@
-// Local preview for the visual-switches demo: the real app over an in-memory store that holds the
+// Local preview with sample data: the real app over an in-memory store that holds the
 // bundled fixtures plus generated sample games. No database; nothing is written to disk.
 //
-//   npm run demo        → http://localhost:8080/demo/visuals   (PORT=… to change the port)
+//   npm run demo        → http://localhost:8080   (PORT=… to change the port)
 //
 // The sample games are made up (deterministic, seeded) so the stats pages have something to
 // show. They follow contract v1: seat order, the winner is whoever the game ended on, totals add up.
@@ -113,5 +113,5 @@ for (const f of fs.readdirSync(FIXTURES_DIR).filter((n) => n.endsWith(".json")))
 const total = (await store.list()).length;
 serve({ fetch: createApp(store, { timeZone: "UTC" }).fetch, port: PORT, hostname: "0.0.0.0" }, (info) => {
   console.log(`demo: ${total} games in memory (sample + fixtures)`);
-  console.log(`open http://localhost:${info.port}/demo/visuals`);
+  console.log(`open http://localhost:${info.port}`);
 });

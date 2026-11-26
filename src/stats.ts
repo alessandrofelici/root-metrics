@@ -16,6 +16,15 @@ export function quantile(sorted: number[], q: number): number {
   return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (pos - lo);
 }
 
+/** Spread of turn lengths (C4): fastest, quartiles, median, slowest. */
+export interface Spread { min: number; q1: number; median: number; q3: number; max: number }
+
+export function turnSpread(turnsMs: number[]): Spread | undefined {
+  if (turnsMs.length === 0) return undefined;
+  const s = [...turnsMs].sort((a, b) => a - b);
+  return { min: s[0]!, q1: quantile(s, 0.25), median: quantile(s, 0.5), q3: quantile(s, 0.75), max: s.at(-1)! };
+}
+
 /** Games that count toward cross-game stats. */
 export function statGames(snap: Snapshot): GameFacts[] {
   return snap.games.filter((g) => g.players.length >= 2);
