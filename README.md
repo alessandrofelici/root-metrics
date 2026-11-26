@@ -9,7 +9,7 @@ The full brief and data contract (v1) are in [`specs.md`](specs.md).
 | Concern | Choice |
 |---|---|
 | Language | TypeScript (Node 22 LTS) |
-| Server + pages | Hono, server-rendered JSX and SVG; no client JavaScript |
+| Server + pages | Hono, server-rendered JSX and SVG. One small script, `public/app.js`, changes calendar months in place; every page works without it |
 | Styles | One stylesheet, `public/app.css`, with design tokens from Figma (light and dark); fonts Libron and IBM Plex Mono, self-hosted in `public/fonts/` (OFL) |
 | Storage | SQLite (`better-sqlite3`), one file: `data/rootclock.db`; or Supabase Postgres when hosted (see [Hosting on Vercel + Supabase](#hosting-on-vercel--supabase)) |
 | Validation | zod |
@@ -52,7 +52,7 @@ The design lives in Figma (Screens page); decisions are tracked in GitHub #23 an
 
 | Path | Page |
 |---|---|
-| `/` | Latest game, a calendar of one month (`?month=YYYY-MM`), View stats. Months slide in the arrow's direction (cross-document View Transitions). |
+| `/` | Latest game, a calendar of one month (`?month=YYYY-MM`), View stats. Arrows and swipes change the month in place (no reload) and slide in the arrow's direction; without JavaScript they are plain links. |
 | `/days/YYYY-MM-DD` | A day with 2+ games; a day with one game redirects to it |
 | `/games/<game_id>` | Who used the time, players with turn-by-turn bars (expandable on phones, a table on wide screens), pace. The game ID is never shown. |
 | `/stats` | Records, then Games, Players and Factions |

@@ -140,6 +140,23 @@ describe("with both fixtures stored", () => {
     expect(bad.body).not.toContain("data-slide");
   });
 
+  it("calendar fragment: one month's calendar for in-place month changes", async () => {
+    const page = await get("/");
+    expect(page.body).toContain('<script src="/static/app.js" defer=""></script>');
+    expect(page.body).toContain('data-calendar="2026-11"');
+    expect(page.body).toContain('data-month="2026-10" data-dir="prev"');
+    const frag = await get("/fragments/calendar?month=2026-10");
+    expect(frag.status).toBe(200);
+    expect(frag.body.toLowerCase()).not.toContain("<!doctype");
+    expect(frag.body).toMatch(/^<section class="card calendar"/);
+    expect(frag.body).toContain('data-calendar="2026-10"');
+    expect(frag.body).toContain("October 2026");
+    const nov = await get("/fragments/calendar?month=2026-11");
+    expect(nov.body).toContain('href="/days/2026-11-21"');
+    expect((await get("/fragments/calendar?month=nope")).status).toBe(400);
+    expect((await get("/fragments/calendar")).status).toBe(400);
+  });
+
   it("stats pages render and never show catalogue IDs", async () => {
     for (const p of ["/stats", "/stats/games", "/stats/players", "/stats/players?view=wins", "/stats/factions", "/players/alex", "/factions/eyrie"]) {
       const { status, body } = await get(p);

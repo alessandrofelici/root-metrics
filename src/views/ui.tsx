@@ -1,6 +1,7 @@
 // Shared building blocks, one per Figma component (Components page): Header, Game card,
 // Calendar month/day, Stat tile, Row (link / disclosure), Player row, Divider, Back link,
-// Winner marker, Chart header, plus the charts. Server-rendered; no client JS. All text goes
+// Winner marker, Chart header, plus the charts. Server-rendered; the only client JS is
+// public/app.js, which changes calendar months in place (everything works without it). All text goes
 // through JSX interpolation, which escapes it: never use raw() for stored strings.
 // Catalogue IDs (C1…W9) go in data-chart attributes only; they are never shown.
 import type { Child } from "hono/jsx";
@@ -44,6 +45,7 @@ export function page(title: string, body: Child, opts: { slide?: "prev" | "next"
         <meta name="color-scheme" content="light dark" />
         <title>{title}</title>
         <link rel="stylesheet" href="/static/app.css" />
+        <script src="/static/app.js" defer></script>
       </head>
       <body>
         <Header />
@@ -185,14 +187,14 @@ export function CalendarMonth({ month, snap, today }: { month: string; snap: Sna
   while (cells.length % 7) cells.push(null);
   const anyGames = [...snap.byDay.keys()].some((d) => d.startsWith(month));
   return (
-    <section class="card calendar" aria-label={`${monthLabel(month)} calendar`}>
+    <section class="card calendar" aria-label={`${monthLabel(month)} calendar`} data-calendar={month}>
       <div class="cal-head">
-        <a class="cal-nav" href={`/?month=${prev}&slide=prev`} aria-label="Previous month">
+        <a class="cal-nav" href={`/?month=${prev}&slide=prev`} aria-label="Previous month" data-month={prev} data-dir="prev">
           <ChevronLeft />
         </a>
-        <h2 class="cal-title">{monthLabel(month)}</h2>
+        <h2 class="cal-title" aria-live="polite">{monthLabel(month)}</h2>
         {canNext ? (
-          <a class="cal-nav" href={`/?month=${next}&slide=next`} aria-label="Next month">
+          <a class="cal-nav" href={`/?month=${next}&slide=next`} aria-label="Next month" data-month={next} data-dir="next">
             <ChevronRight />
           </a>
         ) : (

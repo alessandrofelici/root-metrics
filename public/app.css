@@ -156,7 +156,10 @@ a.game-card:hover { text-decoration: none; border-color: var(--color-accent); }
 .card-foot { display: flex; justify-content: space-between; align-items: center; }
 
 /* Calendar */
-.calendar { padding: var(--space-16); display: flex; flex-direction: column; gap: var(--space-12); }
+.calendar { padding: var(--space-16); display: flex; flex-direction: column; gap: var(--space-12); overflow: hidden; touch-action: pan-y; }
+/* Fallback slide when the browser has no View Transitions (public/app.js adds the class). */
+.calendar.slide-in-next .cal-grid { animation: 260ms ease-out both in-from-right; }
+.calendar.slide-in-prev .cal-grid { animation: 260ms ease-out both in-from-left; }
 .cal-head { display: flex; justify-content: space-between; align-items: center; }
 .cal-title { font-size: 16px; font-weight: 700; }
 .cal-nav { display: inline-flex; padding: var(--space-8); border-radius: var(--radius-full); color: var(--color-text); }
@@ -285,8 +288,10 @@ a.record:hover { text-decoration: none; border-color: var(--color-accent); }
   .records > *, .explore > * { flex: 1; }
 }
 
-/* Month slide: each month is a page load; the browser animates the grid between them
-   (cross-document View Transitions). Unsupported browsers or reduced motion: instant. */
+/* Month slide. With JavaScript, public/app.js swaps the month in place inside a same-document
+   View Transition. Without it, each month is a page load and the browser animates the grid
+   between pages (cross-document View Transitions). Both use the rules below; reduced motion:
+   instant. */
 @view-transition { navigation: auto; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 @keyframes out-to-left { to { transform: translateX(-100%); opacity: 0; } }
@@ -300,4 +305,5 @@ html[data-slide="prev"]::view-transition-new(month) { animation: 260ms ease-in-o
 ::view-transition-group(month) { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  .calendar .cal-grid { animation: none !important; }
 }
