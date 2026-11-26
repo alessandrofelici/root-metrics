@@ -305,6 +305,20 @@ export function TimeShare({ g }: { g: GameFacts }) {
   const size = 156, sw = 22, r = (size - sw) / 2, c = 2 * Math.PI * r, mid = size / 2;
   const gap = g.players.length > 1 ? 2 : 0;
   const short = (name: string) => (name.length > 14 ? `${name.slice(0, 13)}…` : name);
+  // Text in the hole: as large as fits (monospace: 0.6em a character, plus the label's 0.06em
+  // tracking), the two lines centred as one block on the middle of the ring.
+  const hole = 2 * (r - sw / 2) - 24;
+  const fit = (text: string, max: number, em: number) => r2(Math.min(max, hole / (Math.max(1, [...text].length) * em)));
+  const Center = ({ label, value }: { label: string; value: string }) => {
+    const ls = fit(label, 12, 0.66), vs = fit(value, 24, 0.6), gap = 4;
+    const top = mid - (ls + gap + vs) / 2;
+    return (
+      <>
+        <text class="donut-label" x={mid} y={r2(top + ls / 2)} text-anchor="middle" dominant-baseline="central" font-size={ls}>{label}</text>
+        <text class="donut-value" x={mid} y={r2(top + ls + gap + vs / 2)} text-anchor="middle" dominant-baseline="central" font-size={vs}>{value}</text>
+      </>
+    );
+  };
   let start = 0;
   const segs = g.players.map((p) => {
     const frac = p.totalMs / sum;
@@ -317,15 +331,13 @@ export function TimeShare({ g }: { g: GameFacts }) {
       <div class="donut-wrap">
         <svg class="donut" viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={g.players.map((p) => `${p.nickname} ${formatPercent(p.totalMs / sum)}`).join(", ")}>
           <g class="donut-center donut-center-default">
-            <text class="donut-label" x={mid} y={mid - 9} text-anchor="middle">GAME TIME</text>
-            <text class="donut-value" x={mid} y={mid + 9} text-anchor="middle">{formatTotal(g.globalMs)}</text>
+            <Center label="GAME TIME" value={formatTotal(g.globalMs)} />
           </g>
           {segs.map((s) => (
             <g class={`donut-part ${factionTone(s.p.faction)}`}>
               <circle class="donut-seg" cx={mid} cy={mid} r={r2(r)} stroke-width={sw} stroke-dasharray={`${r2(s.len)} ${r2(c - s.len)}`} stroke-dashoffset={r2(s.offset)} transform={`rotate(-90 ${mid} ${mid})`} />
               <g class="donut-center donut-center-player">
-                <text class="donut-label" x={mid} y={mid - 9} text-anchor="middle">{short(s.p.nickname).toUpperCase()}</text>
-                <text class="donut-value" x={mid} y={mid + 9} text-anchor="middle">{formatPercent(s.frac)}</text>
+                <Center label={short(s.p.nickname).toUpperCase()} value={formatPercent(s.frac)} />
               </g>
             </g>
           ))}
