@@ -31,7 +31,8 @@ afterEach(async () => {
 });
 
 const page = async (id: string) => (await createApp(store).request(`/games/${id}`)).text();
-const turnItems = (html: string) => html.match(/<li( class="over")?>[0-9:]+( \(over limit\))?<\/li>/g) ?? [];
+/** Full-size turn bars (the expandable rows); the wide table's mini bars carry no data-turn. */
+const bars = (html: string) => html.match(/<rect class="bar [a-z]+" data-turn="\d+"/g) ?? [];
 
 describe("edge-case fixtures", () => {
   it("every edge fixture parses with no warnings", async () => {
@@ -44,29 +45,34 @@ describe("edge-case fixtures", () => {
     expect(r.players.map((p) => p.turns_ms.length)).toEqual([128, 128, 128, 128]);
     await store.save(r);
     expect((await store.get(r.game_id))!.result).toEqual(r);
-    expect(turnItems(await page(r.game_id))).toHaveLength(512);
+    const html = await page(r.game_id);
+    expect(bars(html)).toHaveLength(512);
+    expect(html).not.toMatch(/NaN/);
   });
 
-  it("turns_truncated: shows the note and never flags the folded last turn", async () => {
+  it("turns_truncated: notes it, dashes the folded last turn, never flags it over, winner NULL", async () => {
     const r = load("truncated.json");
     expect(r.players[0]!.turns_truncated).toBe(true);
     await store.save({ ...r, turn_limit_ms: 1 }); // every normal turn is over a 1 ms limit
     const html = await page(r.game_id);
-    expect(html).toContain("last turn includes extra turns beyond 128");
-    const p1 = turnItems(html).slice(0, 128);
-    expect(p1.slice(0, 127).every((li) => li.includes("over limit"))).toBe(true);
-    expect(p1[127]).not.toContain("over limit");
+    expect(html).toContain("Jacob&#39;s last turn includes extra turns beyond 128.");
+    const p1 = bars(html).slice(0, 128);
+    expect(p1.slice(0, 127).every((b) => b.includes('"bar over"'))).toBe(true);
+    expect(p1[127]).toContain('"bar folded"');
+    expect(html).toContain("127 of 127"); // over-limit count leaves the folded turn out
+    expect(html).toContain("NULL");
   });
 
-  it("single-turn player renders one turn; over-limit turns are marked", async () => {
+  it("single-turn player: one bar; over-limit counts per player", async () => {
     const r = load("single-turn.json");
     await store.save(r);
     const html = await page(r.game_id);
-    expect(html).toContain("Seat 1: Ahmed");
-    expect(html).toContain("(limit 1:00, 0 over)"); // 0:42
-    expect(html).toContain("(limit 1:00, 1 over)"); // 1:01 and 0:58
-    expect(html).toContain('<li class="over">1:01 (over limit)</li>');
-    expect(html).toContain("<li>0:58</li>");
+    expect(html).toContain(">Ahmed<");
+    expect(bars(html)).toHaveLength(3);
+    expect(html).toContain("0 of 1"); // Ahmed 0:42 under 1:00
+    expect(html).toContain("1 of 2"); // Lorenzo 1:01 over, 0:58 under
+    expect(html).toContain("<title>Turn 1: 1:01 (over 1:00)</title>");
+    expect(html).toContain("<title>Turn 2: 0:58</title>");
   });
 
   it("unknown faction and odd nickname are shown as-is, escaped, without an icon", async () => {
@@ -74,7 +80,7 @@ describe("edge-case fixtures", () => {
     await store.save(r);
     const html = await page(r.game_id);
     expect(html).toContain("Zoë 🦦");
-    expect(html).toContain("Faction: otters");
+    expect(html).toContain(">otters<");
     expect(html).not.toContain("/static/factions/otters.png");
     expect(html).toContain("&lt;b&gt;Robin&lt;/b&gt;");
     expect(html).not.toContain("<b>Robin</b>");
@@ -83,18 +89,17 @@ describe("edge-case fixtures", () => {
 });
 
 describe("over-limit marking on the spec fixtures", () => {
-  it("fixture A marks Alex's 2:14 turn over the 2:00 limit; fixture B has no limit text", async () => {
+  it("fixture A marks Alex's 2:14 turn over the 2:00 limit; fixture B has no limit", async () => {
     const root = path.resolve(import.meta.dirname, "../fixtures");
     for (const f of ["fixture-a.json", "fixture-b.json"]) {
       const out = parseGameResult(fs.readFileSync(path.join(root, f), "utf8"));
       if (out.ok) await store.save(out.result);
     }
     const a = await page("7f3a9c21e04b5d18");
-    expect(a).toContain('<li class="over">2:14 (over limit)</li>');
-    expect(a).toContain("<li>2:00</li>"); // exactly at the limit is not over
-    expect(a.match(/over limit/g)).toHaveLength(1);
+    expect(bars(a).filter((b) => b.includes('"bar over"'))).toHaveLength(1);
+    expect(a).toContain("<title>Turn 2: 2:00</title>"); // exactly at the limit is not over
     const b = await page("c09e5b7a31f2d846");
-    expect(b).not.toContain("over limit");
-    expect(b).not.toContain("(limit ");
+    expect(b).not.toContain('"bar over"');
+    expect(b).not.toContain("(over ");
   });
 });
