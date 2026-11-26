@@ -57,6 +57,7 @@ The design lives in Figma (Screens page); decisions are tracked in GitHub #23 an
 | `/games/<game_id>` | Who used the time, players with turn-by-turn bars (expandable on phones, a table on wide screens), pace. The game ID is never shown. |
 | `/stats` | Records, then Games, Players and Factions |
 | `/stats/games`, `/stats/players`, `/players/<name>`, `/stats/factions`, `/factions/<key>` | The stats sections |
+| `/demo/visuals` | Demo, linked from nowhere: proposed chart switches next to today's components ([docs/visual-switches.md](docs/visual-switches.md)). `npm run demo` serves it locally over sample games |
 
 Raw rows of numbers are not shown in the app; browse them in the Supabase dashboard. Catalogue IDs (C1…C15, W1…W9) stay out of the visible page and appear only in `data-chart` attributes, matching the Figma layer names.
 

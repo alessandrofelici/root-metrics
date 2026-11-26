@@ -36,7 +36,7 @@ export const HomeIcon = () => <Svg size={18}><path d="M3 10.5 12 3l9 7.5" /><pat
 const CrownIcon = () => <Svg size={13}><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z" /></Svg>;
 
 // ---------- Page shell ----------
-export function page(title: string, body: Child, opts: { slide?: "prev" | "next" } = {}) {
+export function page(title: string, body: Child, opts: { slide?: "prev" | "next"; styles?: string[] } = {}) {
   return html`<!doctype html>${(
     <html lang="en" data-slide={opts.slide}>
       <head>
@@ -45,6 +45,9 @@ export function page(title: string, body: Child, opts: { slide?: "prev" | "next"
         <meta name="color-scheme" content="light dark" />
         <title>{title}</title>
         <link rel="stylesheet" href="/static/app.css" />
+        {(opts.styles ?? []).map((href) => (
+          <link rel="stylesheet" href={href} />
+        ))}
         <script src="/static/app.js" defer></script>
       </head>
       <body>

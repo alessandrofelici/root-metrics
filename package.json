@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.tsx",
+    "demo": "tsx scripts/demo-server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "vitest run",
