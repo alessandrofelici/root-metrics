@@ -121,7 +121,6 @@ h1, h2, h3, p { margin: 0; }
   max-width: 1200px; margin: 0 auto;
 }
 .home-link { display: inline-flex; align-items: center; gap: var(--space-8); color: var(--color-text); font-weight: 700; font-size: 20px; }
-.stats-link { display: inline-flex; align-items: center; gap: var(--space-4); font-weight: 700; }
 .content {
   max-width: 1200px; margin: 0 auto;
   padding: var(--space-24) max(16px, env(safe-area-inset-right, 0px)) var(--space-48) max(16px, env(safe-area-inset-left, 0px));
