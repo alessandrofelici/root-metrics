@@ -1,6 +1,6 @@
 # Notes for coding agents
 
-- **Stack:** Hono with server-rendered JSX (`src/views/`), one stylesheet (`public/app.css`), no client JavaScript. Figma design-to-code emits React and Tailwind; translate it to this stack and to the CSS tokens. Don't copy it in.
+- **Stack:** Hono with server-rendered JSX (`src/views/`), one stylesheet (`public/app.css`), and one small progressive-enhancement script (`public/app.js`, calendar only). Every page must still work without it. Figma design-to-code emits React and Tailwind; translate it to this stack and to the CSS tokens. Don't copy it in.
 - **Design source:** Figma file `nwYwpKEd9S0qhmlbVoztWp`. The Screens page holds the screens; the Components page holds the components and variables. CSS tokens in `public/app.css` mirror the Figma variables (`Color`, `Color dark`, `Size`).
 - **Data layers:** `src/derive.ts` (per-game facts, winner, days) → `src/stats.ts` (aggregates, in ms) → `src/views/` (the only place that formats). Pages never compute stats inline.
 - **Escaping:** never render stored strings (nicknames, faction keys, warnings) with `raw()` or `dangerouslySetInnerHTML`. JSX interpolation escapes them.

@@ -13,7 +13,7 @@ import type { ResultStore } from "./types.js";
 import {
   DayPage, FactionPage, FactionsPage, GamePage, GamesStatsPage, HomePage, NotFoundPage, PlayerPage, PlayersPage, StatsPage,
 } from "./views/pages.js";
-import { gameHref, page } from "./views/ui.js";
+import { CalendarMonth, gameHref, page } from "./views/ui.js";
 
 export interface AppOptions {
   publicDir?: string;
@@ -58,6 +58,15 @@ export function createApp(store: ResultStore, opts: AppOptions = {}): Hono {
     const s = c.req.query("slide");
     const slide = s === "prev" || s === "next" ? s : undefined;
     return show(c, "Games", <HomePage snap={snap} month={month} today={today()} />, slide);
+  });
+
+  // One month's calendar, for public/app.js to swap in without reloading the page.
+  app.get("/fragments/calendar", async (c) => {
+    const month = c.req.query("month");
+    if (!month || !MONTH_RE.test(month)) return c.text("month must be YYYY-MM", 400);
+    const snap = await snapshot();
+    c.header("Cache-Control", "no-store");
+    return c.html(<CalendarMonth month={month} snap={snap} today={today()} />);
   });
 
   app.get("/days/:day", async (c) => {
