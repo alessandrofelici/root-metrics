@@ -224,9 +224,10 @@ a.day:hover { text-decoration: none; outline: 1px solid var(--color-accent); }
 .home-actions { grid-area: actions; display: flex; justify-content: center; }
 
 /* Game */
-.game-summary { display: flex; flex-direction: column; gap: var(--space-24); }
+/* Game time, turn limit and who used the time share one card. */
+.game-summary { display: flex; flex-direction: column; gap: var(--space-16); padding: var(--space-16); }
 .share { display: flex; flex-direction: column; gap: var(--space-12); }
-.donut-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-24); }
+.donut-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-16); }
 .donut { flex: none; overflow: visible; }
 .donut circle { fill: none; }
 .donut-seg { stroke: var(--faction); cursor: pointer; transition: opacity 120ms ease, stroke-width 120ms ease; }
@@ -240,7 +241,7 @@ a.day:hover { text-decoration: none; outline: 1px solid var(--color-accent); }
 @media (prefers-reduced-motion: reduce) { .donut-seg, .donut-center { transition: none; } }
 .donut-label { font-family: var(--font-mono); font-weight: 500; font-size: 9px; letter-spacing: 0.06em; fill: var(--color-text-muted); }
 .donut-value { font-family: var(--font-mono); font-size: 13px; fill: var(--color-text); }
-.donut-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); flex: 1 1 160px; min-width: 0; }
+.donut-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); flex: 1 1 112px; min-width: 0; }
 .donut-legend li { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: var(--space-8); }
 .donut-name { overflow-wrap: anywhere; }
 .donut-time { grid-column: 2; }
@@ -404,9 +405,10 @@ a.record:hover { text-decoration: none; border-color: var(--color-accent); }
   .content { padding-left: 120px; padding-right: 120px; padding-top: var(--space-48); }
   .home { grid-template-columns: 420px 1fr; grid-template-rows: auto 1fr; grid-template-areas: "latest calendar" "actions calendar"; align-items: start; column-gap: var(--space-48); }
   .home-actions { justify-content: flex-start; }
-  .game-summary { flex-direction: row; align-items: flex-start; gap: var(--space-48); }
-  .game-summary > .tiles { flex: 0 0 380px; flex-wrap: nowrap; }
-  .game-summary > .share { flex: 1; }
+  .game-summary { flex-direction: row; align-items: center; justify-content: space-around; gap: var(--space-48); padding: var(--space-24); }
+  .game-summary > .tiles { flex: none; flex-direction: column; gap: var(--space-24); }
+  .game-summary > .share { flex: 0 1 auto; }
+  .game-summary .donut-wrap { flex-wrap: nowrap; gap: var(--space-24); }
   .narrow-only { display: none; }
   .wide-only { display: block; }
   .records, .explore { flex-direction: row; }

@@ -86,7 +86,7 @@ export function GamePage({ g, snap }: { g: GameFacts; snap: Snapshot }) {
           </p>
         ) : null}
       </div>
-      <div class="game-summary">
+      <div class="card game-summary">
         <Tiles>
           <StatTile label="Game time" value={formatTotal(g.globalMs)} />
           <StatTile label="Turn limit" value={g.limitMs === null ? "None" : formatTurn(g.limitMs)} />
