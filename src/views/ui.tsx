@@ -309,7 +309,6 @@ export function TurnBars({ p, limitMs, mini = false }: { p: PlayerFacts; limitMs
  *  time, and the accessible name every share, so nothing rests on colour or hover alone. */
 export function TimeShare({ g }: { g: GameFacts }) {
   const sum = g.players.reduce((n, p) => n + p.totalMs, 0) || 1;
-  const top = [...g.players].sort((a, b) => b.totalMs - a.totalMs)[0]!;
   const size = 156, sw = 22, r = (size - sw) / 2, c = 2 * Math.PI * r, mid = size / 2;
   const gap = g.players.length > 1 ? 2 : 0;
   const short = (name: string) => (name.length > 14 ? `${name.slice(0, 13)}…` : name);
@@ -322,7 +321,6 @@ export function TimeShare({ g }: { g: GameFacts }) {
   });
   return (
     <section class="share" data-chart="C6">
-      <Takeaway chart="C6">{`${top.nickname} used the most time: ${formatPercent(top.totalMs / sum)} of the game.`}</Takeaway>
       <div class="donut-wrap">
         <svg class="donut" viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={g.players.map((p) => `${p.nickname} ${formatPercent(p.totalMs / sum)}`).join(", ")}>
           <g class="donut-center donut-center-default">
